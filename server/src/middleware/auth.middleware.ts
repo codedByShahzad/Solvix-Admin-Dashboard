@@ -6,12 +6,8 @@ interface JwtPayload {
   role: "admin" | "editor";
 }
 
-export interface AuthRequest extends Request {
-  user?: JwtPayload;
-}
-
 export const authMiddleware = (
-  req: AuthRequest,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {

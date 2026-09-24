@@ -2,20 +2,26 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/User";
 import { generateToken } from "../utils/jwt";
-import { AuthRequest } from "../middleware/auth.middleware";
 
 export const register = async (req: Request, res: Response) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
 
     // 1. Validate required fields
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !role) {
       return res.status(400).json({
-        message: "Name, email and password are required",
+        message: "Name, email, password and role are required",
       });
     }
 
-    // 2. Check if user already exists
+    // 2. Validate role
+    if (role !== "admin" && role !== "editor") {
+      return res.status(400).json({
+        message: "Role must be either admin or editor",
+      });
+    }
+
+    // 3. Check if user already exists
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
@@ -24,17 +30,18 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    // 3. Hash password
+    // 4. Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 4. Create user
+    // 5. Create user
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
+      role,
     });
 
-    // 5. Return safe response
+    // 6. Return safe response
     return res.status(201).json({
       message: "User registered successfully",
       user: {
@@ -121,16 +128,18 @@ export const login = async (req: Request, res: Response) => {
 };
 
 export const getMe = async (
-  req: AuthRequest,
+  req: Request,
   res: Response
 ) => {
   try {
+    // Check if authenticated user exists
     if (!req.user) {
       return res.status(401).json({
         message: "Unauthorized",
       });
     }
 
+    // Find user using userId from JWT
     const user = await User.findById(req.user.userId).select(
       "-password"
     );
@@ -141,6 +150,7 @@ export const getMe = async (
       });
     }
 
+    // Return safe user information
     return res.status(200).json({
       user: {
         id: user._id,
