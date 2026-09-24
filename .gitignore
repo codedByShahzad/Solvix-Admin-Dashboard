@@ -1,0 +1,99 @@
+# ================================
+# Solvix - Root .gitignore
+# ================================
+
+# Dependencies
+node_modules/
+.pnpm-store/
+.yarn/
+.yarn-cache/
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+
+# Keep example environment files
+!.env.example
+
+# ================================
+# Next.js
+# ================================
+
+.next/
+out/
+.vercel/
+
+# Next.js build cache
+.next/cache/
+
+# ================================
+# Node / Backend
+# ================================
+
+dist/
+build/
+coverage/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ================================
+# TypeScript
+# ================================
+
+*.tsbuildinfo
+
+# ================================
+# OS files
+# ================================
+
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+
+# ================================
+# IDE / Editors
+# ================================
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+.idea/
+*.swp
+*.swo
+
+# ================================
+# Temporary files
+# ================================
+
+tmp/
+temp/
+.cache/
+
+# ================================
+# Testing
+# ================================
+
+.nyc_output/
+playwright-report/
+test-results/
+
+# ================================
+# Misc
+# ================================
+
+*.pid
+*.seed
+*.tgz
