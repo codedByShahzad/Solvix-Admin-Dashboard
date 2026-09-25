@@ -6,6 +6,7 @@ export interface IWebsite extends Document {
   domain: string;
   description?: string;
   isActive: boolean;
+  owner: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -41,6 +42,12 @@ const websiteSchema = new Schema<IWebsite>(
     isActive: {
       type: Boolean,
       default: true,
+    },
+
+    owner: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
   },
   {
