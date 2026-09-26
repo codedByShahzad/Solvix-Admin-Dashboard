@@ -180,9 +180,11 @@ const blogSchema = new Schema<Blog>(
     },
 
     keywords: {
-      type: [String],
-      default: [],
-    },
+  type: [String],
+  default: [],
+  set: (keywords: string[]) =>
+    keywords.map((keyword) => keyword.trim().toLowerCase()),
+},
 
     ogImage: {
       type: String,
@@ -207,9 +209,11 @@ const blogSchema = new Schema<Blog>(
     },
 
     relatedSlugs: {
-      type: [String],
-      default: [],
-    },
+  type: [String],
+  default: [],
+  set: (slugs: string[]) =>
+    slugs.map((slug) => slug.trim().toLowerCase()),
+},
   },
   {
     timestamps: true,
