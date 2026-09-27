@@ -645,6 +645,7 @@ export const deleteMedia = async (
     // ========================================
 
     const userId = req.user?.userId;
+    const role = req.user?.role;
     const { id } = req.params;
 
     // ========================================
@@ -666,6 +667,13 @@ export const deleteMedia = async (
       return res.status(400).json({
         success: false,
         message: "Valid Media ID is required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Media ID",
       });
     }
 
@@ -698,10 +706,14 @@ export const deleteMedia = async (
     }
 
     // ========================================
-    // Check Website Ownership
+    // Authorization
     // ========================================
 
-    if (website.owner.toString() !== userId) {
+    const hasAccess =
+      role === "admin" ||
+      website.owner?.toString() === userId;
+
+    if (!hasAccess) {
       return res.status(403).json({
         success: false,
         message: "You do not have access to this media",
@@ -713,7 +725,9 @@ export const deleteMedia = async (
     // ========================================
 
     if (media.publicId) {
-      await cloudinary.uploader.destroy(media.publicId);
+      await cloudinary.uploader.destroy(
+        media.publicId
+      );
     }
 
     // ========================================

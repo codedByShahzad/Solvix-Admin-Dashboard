@@ -7,6 +7,7 @@ export interface IWebsite extends Document {
   description?: string;
   isActive: boolean;
   owner: mongoose.Types.ObjectId;
+  editors: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -49,10 +50,19 @@ const websiteSchema = new Schema<IWebsite>(
       ref: "User",
       required: true,
     },
+    editors: {
+      type: [
+        {
+          type: Schema.Types.ObjectId,
+          ref: "User",
+        },
+      ],
+      default: [],
+    },
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const Website = mongoose.model<IWebsite>("Website", websiteSchema);
