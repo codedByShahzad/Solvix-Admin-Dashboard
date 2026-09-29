@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: 246 246 249;
+    --surface: 255 255 255;
+    --surface-2: 243 243 247;
+    --border: 229 229 236;
+    --border-strong: 208 208 220;
+    --fg: 18 18 28;
+    --muted: 104 104 124;
+    --subtle: 148 148 166;
+
+    --brand: 84 80 224;
+    --brand-hover: 70 66 206;
+    --brand-fg: 255 255 255;
+    --brand-soft: 238 237 253;
+    --brand-soft-fg: 67 62 196;
+
+    --success: 21 145 83;
+    --success-soft: 225 246 234;
+    --warning: 196 118 8;
+    --warning-soft: 253 243 219;
+    --danger: 214 44 52;
+    --danger-hover: 190 32 40;
+    --danger-soft: 253 232 233;
+    --info: 37 99 220;
+    --info-soft: 224 235 254;
+
+    color-scheme: light;
+  }
+
+  .dark {
+    --bg: 10 10 15;
+    --surface: 19 19 26;
+    --surface-2: 27 27 36;
+    --border: 38 38 50;
+    --border-strong: 56 56 72;
+    --fg: 236 236 244;
+    --muted: 152 152 172;
+    --subtle: 110 110 130;
+
+    --brand: 124 120 245;
+    --brand-hover: 142 138 250;
+    --brand-fg: 255 255 255;
+    --brand-soft: 36 34 72;
+    --brand-soft-fg: 178 175 255;
+
+    --success: 64 196 128;
+    --success-soft: 18 46 32;
+    --warning: 236 168 60;
+    --warning-soft: 52 38 14;
+    --danger: 244 96 102;
+    --danger-hover: 250 120 126;
+    --danger-soft: 58 20 24;
+    --info: 96 150 250;
+    --info-soft: 20 34 64;
+
+    color-scheme: dark;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Let grid/flex children shrink so long truncated text never widens the layout */
+  .grid > * {
+    min-width: 0;
+  }
+
+  body {
+    @apply bg-bg text-fg antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  ::selection {
+    background: rgb(var(--brand) / 0.18);
+  }
+
+  :focus-visible {
+    outline: none;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-border bg-surface shadow-card;
+  }
+
+  .focus-ring {
+    @apply focus-visible:shadow-focus focus-visible:outline-none;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--border-strong)) transparent;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
