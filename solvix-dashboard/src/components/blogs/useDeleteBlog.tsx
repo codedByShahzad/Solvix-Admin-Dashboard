@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { ConfirmDialog } from "@/components/ui";
 import { useDeleteBlogMutation } from "@/store/api/blogApi";
 import { useMutationToast } from "@/hooks/useMutationToast";
@@ -10,12 +11,13 @@ export function useDeleteBlog(onDeleted?: () => void) {
   const [target, setTarget] = useState<Blog | null>(null);
   const [remove, { isLoading }] = useDeleteBlogMutation();
   const run = useMutationToast();
+  const { locked, lock } = useSubmitLock();
 
   const confirm = async () => {
     if (!target) return;
-    const ok = await run(remove(target.id).unwrap(), "Blog deleted successfully");
+    const ok = await run(remove(target.id).unwrap().then(() => true), "Blog deleted successfully");
     setTarget(null);
-    if (ok !== undefined) onDeleted?.();
+    if (ok) onDeleted?.();
   };
 
   return {
@@ -31,8 +33,8 @@ export function useDeleteBlog(onDeleted?: () => void) {
           </>
         }
         confirmLabel="Delete blog"
-        loading={isLoading}
-        onConfirm={confirm}
+        loading={isLoading || locked}
+        onConfirm={lock(confirm)}
         onCancel={() => setTarget(null)}
       />
     ),

@@ -1,4 +1,4 @@
-export {};
+import { Request } from "express";
 
 declare global {
   namespace Express {
@@ -7,6 +7,13 @@ declare global {
         userId: string;
         role: "admin" | "editor";
       };
+
+      integration?: {
+        integrationId: string;
+        websiteId: string;
+      };
     }
   }
 }
+
+export {};

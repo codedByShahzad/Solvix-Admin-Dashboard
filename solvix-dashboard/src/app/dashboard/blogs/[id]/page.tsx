@@ -20,7 +20,7 @@ import { BlogContent } from "@/components/blogs/BlogContent";
 import { SeoPreview } from "@/components/blogs/SeoPreview";
 import { useDeleteBlog } from "@/components/blogs/useDeleteBlog";
 import { useGetBlogQuery, useGetBlogsQuery } from "@/store/api/blogApi";
-import { formatDate, formatDateTime, siteUrl } from "@/utils/format";
+import { formatCalendarDate, formatDateTime, siteUrl } from "@/utils/format";
 
 export default function BlogDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,7 +46,7 @@ export default function BlogDetailPage() {
       {(blog) => {
         const path = blog.canonicalPath || `/blog/${blog.slug}`;
         const liveUrl = blog.status === "published" ? siteUrl(blog.website?.domain, path) : undefined;
-        const related = blog.relatedSlugs.map((slug) => ({ slug, blog: all.data?.items.find((b) => b.slug === slug) }));
+        const related = blog.relatedSlugs.map((slug) => ({ slug, blog: all.data?.find((b) => b.slug === slug && b.websiteId === blog.websiteId) }));
 
         return (
           <>
@@ -90,19 +90,19 @@ export default function BlogDetailPage() {
                     {blog.author?.name && <span className="font-medium text-fg">{blog.author.name}</span>}
                     <span className="flex items-center gap-1">
                       <CalendarClock className="size-3.5" />
-                      {formatDate(blog.publishDate, "Not published")}
+                      {formatCalendarDate(blog.publishDate, "Not published")}
                     </span>
                     {blog.readingTime ? (
                       <span className="flex items-center gap-1">
                         <Clock className="size-3.5" />
-                        {blog.readingTime} min read
+                        {blog.readingTime}
                       </span>
                     ) : null}
                   </div>
                   <h2 className="text-balance text-3xl font-semibold leading-tight tracking-tight text-fg">{blog.title}</h2>
                   {blog.subtitle && <p className="mt-3 text-lg leading-relaxed text-muted">{blog.subtitle}</p>}
                   <div className="my-7 h-px bg-border" />
-                  <BlogContent blocks={blog.content} />
+                  <BlogContent sections={blog.sections} />
                 </article>
               </Card>
 
@@ -114,7 +114,7 @@ export default function BlogDetailPage() {
                       items={[
                         { label: "Status", value: <StatusBadge status={blog.status} /> },
                         { label: "Website", value: blog.website?.name ?? blog.websiteId ?? "—" },
-                        { label: "Publish date", value: formatDate(blog.publishDate) },
+                        { label: "Publish date", value: formatCalendarDate(blog.publishDate) },
                         { label: "Author", value: blog.author?.name ?? "—" },
                         { label: "Created", value: formatDateTime(blog.createdAt) },
                         { label: "Updated", value: formatDateTime(blog.updatedAt) },

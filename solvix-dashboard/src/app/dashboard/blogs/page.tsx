@@ -33,7 +33,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { formatDate, formatRelative } from "@/utils/format";
 import type { Blog } from "@/types";
 
-type StatusFilter = "all" | "published" | "draft";
+type StatusFilter = "all" | "published" | "draft" | "archived";
 
 function BlogsView() {
   const router = useRouter();
@@ -47,7 +47,7 @@ function BlogsView() {
   const debounced = useDebounce(search);
   const { requestDelete, dialog } = useDeleteBlog();
 
-  const items = useMemo(() => q.data?.items ?? [], [q.data]);
+  const items = useMemo(() => q.data ?? [], [q.data]);
 
   const websiteOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -65,6 +65,7 @@ function BlogsView() {
       all: items.length,
       published: items.filter((b) => b.status === "published").length,
       draft: items.filter((b) => b.status === "draft").length,
+      archived: items.filter((b) => b.status === "archived").length,
     }),
     [items],
   );
@@ -174,11 +175,12 @@ function BlogsView() {
       <Segmented<StatusFilter>
         value={status}
         onChange={setStatus}
-        className="self-start"
+        className="max-w-full self-start overflow-x-auto"
         items={[
           { value: "all", label: `All · ${counts.all}` },
           { value: "published", label: `Published · ${counts.published}` },
           { value: "draft", label: `Drafts · ${counts.draft}` },
+          ...(counts.archived ? [{ value: "archived" as const, label: `Archived · ${counts.archived}` }] : []),
         ]}
       />
     </div>
@@ -199,7 +201,7 @@ function BlogsView() {
       <QueryState
         query={q}
         loading={view === "grid" ? <GridSkeleton count={6} /> : <TableSkeleton rows={8} />}
-        isEmpty={(d) => d.items.length === 0}
+        isEmpty={(d) => d.length === 0}
         empty={
           <div className="card">
             <EmptyState

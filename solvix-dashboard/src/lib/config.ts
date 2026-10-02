@@ -1,13 +1,11 @@
 /**
- * Central runtime configuration. Every other file reads from here —
- * never read process.env directly elsewhere.
+ * Central runtime configuration. Only public, non-secret values belong here —
+ * anything prefixed NEXT_PUBLIC_ is shipped to the browser.
  */
 const DEFAULT_API_URL = "http://localhost:8000/api/v1";
 
 export const config = {
   apiUrl: (process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL).replace(/\/+$/, ""),
-  /** Sample-data preview on the login page. Anything except "false" enables it. */
-  demoEnabled: process.env.NEXT_PUBLIC_ENABLE_DEMO !== "false",
   appName: "Solvix",
   companyName: "Soldevix Solutions",
 } as const;

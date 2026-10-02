@@ -19,12 +19,12 @@ import {
   RowActions,
   SearchInput,
   Segmented,
-  StatusBadge,
   TableSkeleton,
   type Column,
 } from "@/components/ui";
 import { WebsiteAvatar } from "@/components/websites/WebsiteAvatar";
 import { WebsiteCard } from "@/components/websites/WebsiteCard";
+import { WebsiteStatusBadge } from "@/components/websites/WebsiteStatusBadge";
 import { useDeleteWebsite } from "@/components/websites/useDeleteWebsite";
 import { useGetWebsitesQuery } from "@/store/api/websiteApi";
 import { useGetBlogsQuery } from "@/store/api/blogApi";
@@ -47,16 +47,16 @@ export default function WebsitesPage() {
   const blogCounts = useMemo(() => {
     if (!blogs.data) return undefined;
     const map = new Map<string, number>();
-    for (const b of blogs.data.items) map.set(b.websiteId, (map.get(b.websiteId) ?? 0) + 1);
+    for (const b of blogs.data) map.set(b.websiteId, (map.get(b.websiteId) ?? 0) + 1);
     return map;
   }, [blogs.data]);
 
   const filtered = useMemo(() => {
     const term = debounced.trim().toLowerCase();
-    return (q.data?.items ?? []).filter(
+    return (q.data ?? []).filter(
       (w) =>
-        (status === "all" || w.status === status) &&
-        (!term || w.name.toLowerCase().includes(term) || w.domain.toLowerCase().includes(term)),
+        (status === "all" || (status === "active" ? w.isActive : !w.isActive)) &&
+        (!term || w.name.toLowerCase().includes(term) || w.domain.toLowerCase().includes(term) || w.slug.includes(term)),
     );
   }, [q.data, debounced, status]);
 
@@ -106,7 +106,7 @@ export default function WebsitesPage() {
         </div>
       ),
     },
-    { key: "status", header: "Status", sortValue: (w) => w.status, cell: (w) => <StatusBadge status={w.status} /> },
+    { key: "status", header: "Status", sortValue: (w) => (w.isActive ? 1 : 0), cell: (w) => <WebsiteStatusBadge active={w.isActive} /> },
     {
       key: "blogs",
       header: "Blogs",
@@ -114,7 +114,14 @@ export default function WebsitesPage() {
       sortValue: (w) => blogCounts?.get(w.id),
       cell: (w) => <span className="tabular-nums text-fg">{blogCounts ? (blogCounts.get(w.id) ?? 0) : "—"}</span>,
     },
-    { key: "owner", header: "Owner", cell: (w) => <span className="text-muted">{w.owner?.name ?? "—"}</span> },
+    {
+      key: "editors",
+      header: "Editors",
+      align: "right",
+      sortValue: (w) => w.editors.length,
+      cell: (w) => <span className="tabular-nums text-fg">{w.editors.length}</span>,
+    },
+    { key: "slug", header: "Slug", cell: (w) => <code className="font-mono text-xs text-muted">{w.slug}</code> },
     {
       key: "created",
       header: "Created",
@@ -126,7 +133,7 @@ export default function WebsitesPage() {
 
   const toolbar = (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <SearchInput value={search} onChange={setSearch} placeholder="Search name or domain…" />
+      <SearchInput value={search} onChange={setSearch} placeholder="Search name, domain or slug…" />
       <div className="flex items-center gap-2">
         <Segmented<StatusFilter>
           value={status}
@@ -154,7 +161,7 @@ export default function WebsitesPage() {
     <>
       <PageHeader
         title="Websites"
-        description="Every website managed through Solvix."
+        description="Websites you own in Solvix."
         actions={
           <ButtonLink href="/dashboard/websites/create" leftIcon={<Plus className="size-4" />}>
             Add website
@@ -165,13 +172,13 @@ export default function WebsitesPage() {
       <QueryState
         query={q}
         loading={view === "grid" ? <GridSkeleton count={6} /> : <TableSkeleton />}
-        isEmpty={(d) => d.items.length === 0}
+        isEmpty={(d) => d.length === 0}
         empty={
           <div className="card">
             <EmptyState
               icon={<Globe />}
               title="No websites yet"
-              description="Add your first website to start managing its blogs and media."
+              description="Add your first website to start managing its blogs, media and integration."
               action={
                 <ButtonLink href="/dashboard/websites/create" leftIcon={<Plus className="size-4" />}>
                   Add website
@@ -192,7 +199,7 @@ export default function WebsitesPage() {
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {filtered.map((w) => (
-                    <WebsiteCard key={w.id} website={w} blogCount={blogCounts?.get(w.id) ?? (blogCounts ? 0 : undefined)} />
+                    <WebsiteCard key={w.id} website={w} blogCount={blogCounts ? (blogCounts.get(w.id) ?? 0) : undefined} />
                   ))}
                 </div>
               )}
@@ -213,7 +220,7 @@ export default function WebsitesPage() {
                     <div className="truncate font-medium text-fg">{w.name}</div>
                     <div className="truncate text-xs text-muted">{hostOf(w.domain)}</div>
                   </div>
-                  <StatusBadge status={w.status} />
+                  <WebsiteStatusBadge active={w.isActive} />
                   {actions(w)}
                 </div>
               )}

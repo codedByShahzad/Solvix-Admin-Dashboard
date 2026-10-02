@@ -11,7 +11,7 @@ export default function EditBlogPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const q = useGetBlogQuery(id);
-  const [update, { isLoading }] = useUpdateBlogMutation();
+  const [update, { isLoading, isSuccess }] = useUpdateBlogMutation();
   const run = useMutationToast();
 
   return (
@@ -35,9 +35,8 @@ export default function EditBlogPage() {
         {(blog) => (
           <BlogEditor
             blog={blog}
-            endpoint="blogs.update"
             cancelHref={`/dashboard/blogs/${id}`}
-            submitting={isLoading}
+            submitting={isLoading || isSuccess}
             onSubmit={async (values) => {
               const ok = await run(update({ id, body: toBlogPayload(values) }).unwrap(), "Blog updated successfully");
               if (ok) router.push(`/dashboard/blogs/${id}`);

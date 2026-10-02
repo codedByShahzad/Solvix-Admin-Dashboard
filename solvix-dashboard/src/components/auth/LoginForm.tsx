@@ -1,19 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { AlertCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck, UserPen } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { useLoginMutation } from "@/store/api/authApi";
-import { parseLoginResponse } from "@/features/auth/parseLoginResponse";
 import { useAuth } from "@/features/auth/useAuth";
+import { useAppSelector } from "@/store/hooks";
 import { getErrorMessage } from "@/lib/api/errors";
-import { config } from "@/lib/config";
-import { DEMO_USERS } from "@/lib/demo/data";
 import { Button, Field, Input } from "@/components/ui";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
 const schema = z.object({
   email: z.string().trim().min(1, "Email is required").email("Enter a valid email address"),
@@ -29,43 +29,38 @@ export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const { signIn } = useAuth();
-  const [login, { isLoading }] = useLoginMutation();
+  const [login, { isLoading: loggingIn, isSuccess }] = useLoginMutation();
+  const isLoading = loggingIn || isSuccess;
   const [showPassword, setShowPassword] = useState(false);
+  const { locked, lock } = useSubmitLock();
   const [formError, setFormError] = useState<string | null>(null);
-  const expired = params.get("reason") === "expired";
+  // The session cookie expires together with the JWT, so on a fresh visit the
+  // middleware may not know why — AuthBootstrap records it in the auth state.
+  const signOutReason = useAppSelector((s) => s.auth.signOutReason);
+  const expired = params.get("reason") === "expired" || signOutReason === "expired";
+  const registered = params.get("registered") === "1";
   const next = safeNext(params.get("next"));
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<Values>({ resolver: zodResolver(schema), defaultValues: { email: "", password: "" } });
+  } = useForm<Values>({
+    resolver: zodResolver(schema),
+    defaultValues: { email: params.get("email") ?? "", password: "" },
+  });
 
   const onSubmit = async (values: Values) => {
     setFormError(null);
     try {
-      const res = await login(values).unwrap();
-      const parsed = parseLoginResponse(res);
-      if (!parsed.ok) {
-        setFormError(
-          parsed.reason === "unsupported-role"
-            ? "Your account doesn't have dashboard access."
-            : "Signed in, but the server response had no token. Check parseLoginResponse.ts against the backend.",
-        );
-        return;
-      }
-      signIn(parsed.token, parsed.user, "live");
-      toast.success(`Welcome back, ${parsed.user.name.split(" ")[0]}`);
+      // POST /auth/login → { token, user }. 401 = bad credentials, 403 = inactive account.
+      const { token, user } = await login({ email: values.email.trim().toLowerCase(), password: values.password }).unwrap();
+      signIn(token, user);
+      toast.success(`Welcome back, ${user.name.split(" ")[0]}`);
       router.replace(next);
     } catch (e) {
       setFormError(getErrorMessage(e));
     }
-  };
-
-  const startDemo = (role: "admin" | "editor") => {
-    signIn(`demo-${role}`, DEMO_USERS[role], "demo");
-    toast.info(`Demo preview as ${role === "admin" ? "Admin" : "Editor"}`, { description: "Sample data only — nothing is saved." });
-    router.replace("/dashboard");
   };
 
   return (
@@ -74,6 +69,13 @@ export function LoginForm() {
         <h1 className="text-2xl font-semibold tracking-tight text-fg">Sign in to Solvix</h1>
         <p className="mt-1.5 text-sm text-muted">Manage content across all Soldevix websites.</p>
       </div>
+
+      {registered && !formError && (
+        <div className="mb-5 flex items-start gap-2.5 rounded-xl border border-success/25 bg-success-soft px-3.5 py-3 text-sm text-fg">
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
+          <span>Account created. Sign in to continue.</span>
+        </div>
+      )}
 
       {(expired || formError) && (
         <div
@@ -89,18 +91,9 @@ export function LoginForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+      <form onSubmit={lock(handleSubmit(onSubmit))} className="space-y-4" noValidate>
         <Field label="Email" htmlFor="email" error={errors.email?.message}>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="you@soldevix.com"
-            leftIcon={<Mail />}
-            invalid={!!errors.email}
-            className="h-10"
-            {...register("email")}
-          />
+          <Input id="email" type="email" autoComplete="email" placeholder="you@soldevix.com" leftIcon={<Mail />} invalid={!!errors.email} className="h-10" {...register("email")} />
         </Field>
         <Field label="Password" htmlFor="password" error={errors.password?.message}>
           <Input
@@ -124,28 +117,17 @@ export function LoginForm() {
             {...register("password")}
           />
         </Field>
-        <Button type="submit" size="lg" className="w-full" loading={isLoading} rightIcon={<ArrowRight />}>
-          {isLoading ? "Signing in…" : "Sign in"}
+        <Button type="submit" size="lg" className="w-full" loading={isLoading || locked} rightIcon={<ArrowRight />}>
+          {isLoading || locked ? "Signing in…" : "Sign in"}
         </Button>
       </form>
 
-      {config.demoEnabled && (
-        <div className="mt-8">
-          <div className="relative flex items-center">
-            <div className="h-px flex-1 bg-border" />
-            <span className="px-3 text-xs font-medium text-subtle">or preview the UI with sample data</span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <Button variant="secondary" onClick={() => startDemo("admin")} leftIcon={<ShieldCheck />}>
-              Preview as Admin
-            </Button>
-            <Button variant="secondary" onClick={() => startDemo("editor")} leftIcon={<UserPen />}>
-              Preview as Editor
-            </Button>
-          </div>
-        </div>
-      )}
+      <p className="mt-8 text-center text-sm text-muted">
+        Don&apos;t have an account?{" "}
+        <Link href="/register" className="font-medium text-brand hover:underline">
+          Create one
+        </Link>
+      </p>
     </div>
   );
 }

@@ -31,9 +31,10 @@ import { MediaUploader } from "@/components/media/MediaUploader";
 import { useDeleteMedia } from "@/components/media/useDeleteMedia";
 import { WebsiteSelectField } from "@/components/websites/WebsiteSelectField";
 import { useGetMediaListQuery } from "@/store/api/mediaApi";
+import { useIsAdmin } from "@/features/auth/useAuth";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { useDebounce } from "@/hooks/useDebounce";
-import { mediaFormat, mediaKind, type MediaKind } from "@/features/media/utils";
+import { mediaFormat } from "@/features/media/utils";
 import { formatBytes, formatDate, formatRelative } from "@/utils/format";
 import type { Media } from "@/types";
 
@@ -41,10 +42,10 @@ const PAGE_SIZE = 24;
 
 export default function MediaLibraryPage() {
   const router = useRouter();
+  const isAdmin = useIsAdmin();
   const q = useGetMediaListQuery();
   const [search, setSearch] = useState("");
   const [website, setWebsite] = useState("");
-  const [kind, setKind] = useState<"all" | MediaKind>("all");
   const [view, setView] = useState<"grid" | "table">("grid");
   const [page, setPage] = useState(1);
   const [uploadWebsite, setUploadWebsite] = useState("");
@@ -52,7 +53,7 @@ export default function MediaLibraryPage() {
   const debounced = useDebounce(search);
   const { requestDelete, dialog } = useDeleteMedia();
 
-  const items = useMemo(() => q.data?.items ?? [], [q.data]);
+  const items = useMemo(() => q.data ?? [], [q.data]);
   const websiteOptions = useMemo(() => {
     const map = new Map<string, string>();
     for (const m of items) if (m.websiteId) map.set(m.websiteId, m.website?.name ?? m.websiteId);
@@ -61,15 +62,15 @@ export default function MediaLibraryPage() {
 
   const filtered = useMemo(() => {
     const term = debounced.trim().toLowerCase();
-    return items
-      .filter(
-        (m) =>
-          (!website || m.websiteId === website) &&
-          (kind === "all" || mediaKind(m) === kind) &&
-          (!term || m.filename.toLowerCase().includes(term) || (m.alt ?? "").toLowerCase().includes(term) || (m.blog?.title ?? "").toLowerCase().includes(term)),
-      )
-      .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
-  }, [items, debounced, website, kind]);
+    return items.filter(
+      (m) =>
+        (!website || m.websiteId === website) &&
+        (!term ||
+          m.filename.toLowerCase().includes(term) ||
+          (m.altText ?? "").toLowerCase().includes(term) ||
+          (m.blog?.title ?? "").toLowerCase().includes(term)),
+    );
+  }, [items, debounced, website]);
 
   const totalSize = useMemo(() => items.reduce((sum, m) => sum + (m.size ?? 0), 0), [items]);
   const pageItems = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -77,7 +78,6 @@ export default function MediaLibraryPage() {
   const clear = () => {
     setSearch("");
     setWebsite("");
-    setKind("all");
     setPage(1);
   };
 
@@ -97,10 +97,14 @@ export default function MediaLibraryPage() {
         <MenuItem href={`/dashboard/media/${m.id}/edit`} icon={<Pencil />}>
           Edit
         </MenuItem>
-        <MenuSeparator />
-        <MenuItem onClick={() => requestDelete(m)} icon={<Trash2 />} danger>
-          Delete
-        </MenuItem>
+        {isAdmin && (
+          <>
+            <MenuSeparator />
+            <MenuItem onClick={() => requestDelete(m)} icon={<Trash2 />} danger>
+              Delete
+            </MenuItem>
+          </>
+        )}
       </Menu>
     </RowActions>
   );
@@ -119,7 +123,10 @@ export default function MediaLibraryPage() {
             <Link href={`/dashboard/media/${m.id}`} onClick={(e) => e.stopPropagation()} className="block max-w-[280px] truncate font-medium text-fg hover:text-brand">
               {m.filename}
             </Link>
-            <div className="text-xs text-muted">{mediaFormat(m)}</div>
+            <div className="text-xs text-muted">
+              {mediaFormat(m)}
+              {m.width && m.height ? ` · ${m.width}×${m.height}` : ""}
+            </div>
           </div>
         </div>
       ),
@@ -142,28 +149,28 @@ export default function MediaLibraryPage() {
 
   const toolbar = (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-      <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder="Search files, alt text, blog…" />
+      <SearchInput
+        value={search}
+        onChange={(v) => {
+          setSearch(v);
+          setPage(1);
+        }}
+        placeholder="Search file name, alt text, blog…"
+      />
       <div className="flex flex-wrap items-center gap-2">
         {websiteOptions.length > 1 && (
           <Select
             value={website}
-            onChange={(e) => { setWebsite(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setWebsite(e.target.value);
+              setPage(1);
+            }}
             options={websiteOptions}
             placeholder="All websites"
             className="h-8 w-40 text-[13px]"
             aria-label="Filter by website"
           />
         )}
-        <Segmented<"all" | MediaKind>
-          value={kind}
-          onChange={(v) => { setKind(v); setPage(1); }}
-          items={[
-            { value: "all", label: "All" },
-            { value: "image", label: "Images" },
-            { value: "video", label: "Video" },
-            { value: "document", label: "Docs" },
-          ]}
-        />
         <Segmented
           value={view}
           onChange={setView}
@@ -180,7 +187,7 @@ export default function MediaLibraryPage() {
     <>
       <PageHeader
         title="Media Library"
-        description={q.data ? `${items.length} file${items.length === 1 ? "" : "s"} · ${formatBytes(totalSize)} stored in Cloudinary` : "Images and files used across your websites."}
+        description={q.data ? `${items.length} image${items.length === 1 ? "" : "s"} · ${formatBytes(totalSize)} stored in Cloudinary` : "Images used across your websites."}
         actions={
           <>
             <ButtonLink href="/dashboard/media/upload" variant="secondary" className="hidden sm:inline-flex">
@@ -196,13 +203,13 @@ export default function MediaLibraryPage() {
       <QueryState
         query={q}
         loading={view === "grid" ? <GridSkeleton /> : <TableSkeleton />}
-        isEmpty={(d) => d.items.length === 0}
+        isEmpty={(d) => d.length === 0}
         empty={
           <div className="card">
             <EmptyState
               icon={<ImageIcon />}
               title="Your media library is empty"
-              description="Upload images to use as hero images, social images and inline blog content."
+              description="Upload JPG, PNG or WebP images to use as hero images, social images and in blog posts."
               action={
                 <Button onClick={uploadModal.open} leftIcon={<CloudUpload />}>
                   Upload media
@@ -230,7 +237,7 @@ export default function MediaLibraryPage() {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium text-fg">{m.filename}</div>
                     <div className="truncate text-xs text-muted">
-                      {formatBytes(m.size)} · {m.website?.name ?? "No website"}
+                      {formatBytes(m.size)} · {m.website?.name ?? "—"}
                     </div>
                   </div>
                   {actions(m)}
@@ -263,10 +270,10 @@ export default function MediaLibraryPage() {
         }
       </QueryState>
 
-      <Modal open={uploadModal.isOpen} onClose={uploadModal.close} size="lg" title="Upload media" description="Files are uploaded through the Solvix backend to Cloudinary.">
+      <Modal open={uploadModal.isOpen} onClose={uploadModal.close} size="lg" title="Upload media" description="Images are uploaded through the Solvix backend to Cloudinary.">
         <div className="space-y-4 pb-3">
-          <WebsiteSelectField value={uploadWebsite} onChange={setUploadWebsite} label="Website" allowEmpty emptyLabel="No specific website" id="upload-website" />
-          <MediaUploader websiteId={uploadWebsite} />
+          <WebsiteSelectField value={uploadWebsite} onChange={setUploadWebsite} required id="upload-website" />
+          <MediaUploader websiteId={uploadWebsite} disabled={!uploadWebsite} />
         </div>
       </Modal>
       {dialog}

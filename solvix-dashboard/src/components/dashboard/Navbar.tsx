@@ -86,7 +86,7 @@ export function Navbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
               aria-haspopup="menu"
               className="focus-ring flex items-center gap-2.5 rounded-lg py-1 pl-1 pr-1 transition-colors hover:bg-surface-2 sm:pr-2"
             >
-              <Avatar name={user.name} src={user.avatar} size="sm" />
+              <Avatar name={user.name} size="sm" />
               <span className="hidden text-left leading-tight sm:block">
                 <span className="block max-w-[140px] truncate text-[13px] font-medium text-fg">{user.name}</span>
                 <span className="block text-2xs capitalize text-muted">{user.role}</span>
@@ -96,7 +96,7 @@ export function Navbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
           )}
         >
           <div className="flex items-center gap-3 px-2.5 py-2.5">
-            <Avatar name={user.name} src={user.avatar} size="md" />
+            <Avatar name={user.name} size="md" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-semibold text-fg">{user.name}</div>
               <div className="truncate text-xs text-muted">{user.email || "—"}</div>

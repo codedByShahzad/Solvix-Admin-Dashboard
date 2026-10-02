@@ -16,41 +16,39 @@ import {
   QueryState,
   Skeleton,
   StatCard,
-  StatusBadge,
   type StatState,
 } from "@/components/ui";
 import { WebsiteAvatar } from "@/components/websites/WebsiteAvatar";
+import { WebsiteStatusBadge } from "@/components/websites/WebsiteStatusBadge";
+import { WebsiteEditorsPanel } from "@/components/websites/WebsiteEditorsPanel";
+import { TransferOwnershipCard } from "@/components/websites/TransferOwnershipCard";
 import { useDeleteWebsite } from "@/components/websites/useDeleteWebsite";
 import { WebsiteIntegrationPanel } from "@/components/integrations/WebsiteIntegrationPanel";
 import { BlogListItem } from "@/components/blogs/BlogListItem";
 import { useGetWebsiteQuery } from "@/store/api/websiteApi";
 import { useGetBlogsQuery } from "@/store/api/blogApi";
 import { useGetMediaListQuery } from "@/store/api/mediaApi";
-import { isUnconfirmed } from "@/lib/api/errors";
+import { useCurrentUser } from "@/features/auth/useAuth";
 import { formatDateTime, hostOf, siteUrl } from "@/utils/format";
 
-function stateOf(q: { isLoading: boolean; isError: boolean; error?: unknown }): StatState {
-  if (q.isLoading) return "loading";
-  if (q.isError) return isUnconfirmed(q.error) ? "pending" : "error";
-  return "ready";
+function stateOf(q: { isLoading: boolean; isError: boolean }): StatState {
+  return q.isLoading ? "loading" : q.isError ? "error" : "ready";
 }
 
 export default function WebsiteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const user = useCurrentUser();
   const q = useGetWebsiteQuery(id);
   const blogsQ = useGetBlogsQuery();
   const mediaQ = useGetMediaListQuery();
   const { requestDelete, dialog } = useDeleteWebsite(() => router.push("/dashboard/websites"));
 
   const siteBlogs = useMemo(
-    () =>
-      (blogsQ.data?.items ?? [])
-        .filter((b) => b.websiteId === id)
-        .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")),
+    () => (blogsQ.data ?? []).filter((b) => b.websiteId === id).sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "")),
     [blogsQ.data, id],
   );
-  const mediaCount = mediaQ.data?.items.filter((m) => m.websiteId === id).length;
+  const mediaCount = mediaQ.data?.filter((m) => m.websiteId === id).length;
 
   return (
     <QueryState
@@ -81,7 +79,7 @@ export default function WebsiteDetailPage() {
               }
               meta={
                 <>
-                  <StatusBadge status={website.status} />
+                  <WebsiteStatusBadge active={website.isActive} />
                   {url && (
                     <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-muted hover:text-brand">
                       {hostOf(website.domain)}
@@ -102,24 +100,12 @@ export default function WebsiteDetailPage() {
               }
             />
 
-            <div className="grid gap-6 lg:grid-cols-3">
+            <div className="grid items-start gap-6 lg:grid-cols-3">
               <div className="space-y-6 lg:col-span-2">
                 <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
                   <StatCard label="Blogs" icon={<FileText />} state={stateOf(blogsQ)} value={siteBlogs.length} />
-                  <StatCard
-                    label="Published"
-                    icon={<FileCheck2 />}
-                    accent="success"
-                    state={stateOf(blogsQ)}
-                    value={siteBlogs.filter((b) => b.status === "published").length}
-                  />
-                  <StatCard
-                    label="Drafts"
-                    icon={<FilePen />}
-                    accent="warning"
-                    state={stateOf(blogsQ)}
-                    value={siteBlogs.filter((b) => b.status === "draft").length}
-                  />
+                  <StatCard label="Published" icon={<FileCheck2 />} accent="success" state={stateOf(blogsQ)} value={siteBlogs.filter((b) => b.status === "published").length} />
+                  <StatCard label="Drafts" icon={<FilePen />} accent="warning" state={stateOf(blogsQ)} value={siteBlogs.filter((b) => b.status === "draft").length} />
                   <StatCard label="Media" icon={<ImageIcon />} accent="info" state={stateOf(mediaQ)} value={mediaCount} />
                 </div>
 
@@ -162,7 +148,7 @@ export default function WebsiteDetailPage() {
                   </div>
                 </Card>
 
-                <WebsiteIntegrationPanel websiteId={id} websiteName={website.name} />
+                <WebsiteIntegrationPanel websiteId={id} websiteName={website.name} websiteDomain={website.domain} />
               </div>
 
               <div className="space-y-6">
@@ -172,9 +158,10 @@ export default function WebsiteDetailPage() {
                     <DetailList
                       items={[
                         { label: "Name", value: website.name },
+                        { label: "Slug", value: <code className="font-mono text-xs">{website.slug}</code> },
                         { label: "Domain", value: hostOf(website.domain) || "—" },
-                        { label: "Status", value: <StatusBadge status={website.status} /> },
-                        { label: "Owner", value: website.owner?.name ?? "—" },
+                        { label: "Status", value: <WebsiteStatusBadge active={website.isActive} /> },
+                        { label: "Owner", value: website.owner === user?.id ? "You" : <code className="font-mono text-xs">{website.owner}</code> },
                         { label: "Created", value: formatDateTime(website.createdAt) },
                         { label: "Updated", value: formatDateTime(website.updatedAt) },
                         { label: "ID", value: <code className="font-mono text-xs">{website.id}</code> },
@@ -188,6 +175,8 @@ export default function WebsiteDetailPage() {
                     )}
                   </div>
                 </Card>
+                <WebsiteEditorsPanel website={website} />
+                <TransferOwnershipCard website={website} />
               </div>
             </div>
             {dialog}

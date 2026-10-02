@@ -18,6 +18,7 @@ import {
 import { MediaPreview } from "@/components/media/MediaPreview";
 import { useDeleteMedia } from "@/components/media/useDeleteMedia";
 import { useGetMediaQuery } from "@/store/api/mediaApi";
+import { useIsAdmin } from "@/features/auth/useAuth";
 import { mediaFormat } from "@/features/media/utils";
 import { formatBytes, formatDateTime } from "@/utils/format";
 
@@ -25,6 +26,7 @@ export default function MediaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const q = useGetMediaQuery(id);
+  const isAdmin = useIsAdmin();
   const { requestDelete, dialog } = useDeleteMedia(() => router.push("/dashboard/media"));
 
   return (
@@ -50,9 +52,11 @@ export default function MediaDetailPage() {
             description={`${mediaFormat(media)} · ${formatBytes(media.size)}`}
             actions={
               <>
-                <Button variant="danger-soft" leftIcon={<Trash2 />} onClick={() => requestDelete(media)}>
-                  Delete
-                </Button>
+                {isAdmin && (
+                  <Button variant="danger-soft" leftIcon={<Trash2 />} onClick={() => requestDelete(media)}>
+                    Delete
+                  </Button>
+                )}
                 {media.url && (
                   <a
                     href={media.url}
@@ -82,22 +86,12 @@ export default function MediaDetailPage() {
                   backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0",
                 }}
               >
-                <MediaPreview media={media} className="object-contain" controls />
+                <MediaPreview media={media} className="object-contain" />
               </div>
-              {(media.alt || media.caption) && (
-                <div className="space-y-1 border-t border-border p-4 text-sm">
-                  {media.alt && (
-                    <p>
-                      <span className="text-muted">Alt: </span>
-                      <span className="text-fg">{media.alt}</span>
-                    </p>
-                  )}
-                  {media.caption && (
-                    <p>
-                      <span className="text-muted">Caption: </span>
-                      <span className="text-fg">{media.caption}</span>
-                    </p>
-                  )}
+              {media.altText && (
+                <div className="border-t border-border p-4 text-sm">
+                  <span className="text-muted">Alt text: </span>
+                  <span className="text-fg">{media.altText}</span>
                 </div>
               )}
             </Card>
@@ -108,7 +102,7 @@ export default function MediaDetailPage() {
                 <div className="p-5">
                   <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-2 py-1.5 pl-3 pr-1.5">
                     <code className="min-w-0 flex-1 truncate font-mono text-xs text-fg" title={media.url}>
-                      {media.url.startsWith("data:") ? "(embedded sample image)" : media.url}
+                      {media.url}
                     </code>
                     <CopyButton value={media.url} toastMessage="URL copied to clipboard" />
                   </div>
@@ -119,6 +113,7 @@ export default function MediaDetailPage() {
                 <div className="p-5">
                   <DetailList
                     items={[
+                      { label: "File name", value: media.filename },
                       { label: "Type", value: media.mimeType ?? mediaFormat(media) },
                       { label: "Size", value: formatBytes(media.size) },
                       { label: "Dimensions", value: media.width && media.height ? `${media.width} × ${media.height}` : "—" },
@@ -136,8 +131,8 @@ export default function MediaDetailPage() {
                           "—"
                         ),
                       },
-                      { label: "Uploaded by", value: media.uploadedBy?.name ?? "—" },
                       { label: "Uploaded", value: formatDateTime(media.createdAt) },
+                      { label: "Updated", value: formatDateTime(media.updatedAt) },
                       { label: "Cloudinary ID", value: media.publicId ? <code className="font-mono text-xs">{media.publicId}</code> : "—" },
                     ]}
                   />

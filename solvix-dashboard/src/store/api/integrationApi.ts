@@ -1,61 +1,90 @@
 import { baseApi } from "./baseApi";
-import { extractItem, extractList, normalizeIntegration, toListResult } from "@/lib/api/normalize";
-import type { ListResult, WebsiteIntegration } from "@/types";
+import {
+  mapIntegration,
+  mapIntegrationCredentials,
+  type DataEnvelope,
+  type RawIntegration,
+  type RawIntegrationCredentials,
+} from "@/lib/api/mappers";
+import type { IntegrationCredentials, IntegrationStatus, WebsiteIntegration } from "@/types";
 
-export interface IntegrationTestInput {
-  apiKey: string;
-  apiSecret: string;
+export interface CreateIntegrationInput {
+  websiteId: string;
+  apiUrl: string;
 }
 
-export interface IntegrationTestResult {
+export interface ConnectionTestResult {
+  status: IntegrationStatus;
+  lastConnectedAt?: string;
+  message: string;
+}
+
+export type CredentialCheckTarget = "integration.blogs" | "integration.media";
+
+export interface CredentialCheckResult {
   count: number;
-  sample: unknown;
+  first: unknown;
 }
 
 export const integrationApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
-    /** /website-integrations — NEEDS BACKEND ROUTE CONFIRMATION */
-    getIntegrations: b.query<ListResult<WebsiteIntegration>, void>({
-      query: () => ({ endpoint: "integrations.list" }),
-      transformResponse: (res: unknown) => toListResult(res, normalizeIntegration),
-      providesTags: (res) => [
-        { type: "Integration" as const, id: "LIST" },
-        ...(res?.items.map((x) => ({ type: "Integration" as const, id: x.id })) ?? []),
-      ],
+    /** GET /website-integrations/:websiteId — 404 means "not set up yet". Never returns key/secret. */
+    getIntegration: b.query<WebsiteIntegration, string>({
+      query: (websiteId) => ({ endpoint: "integrations.get", pathParams: { websiteId } }),
+      transformResponse: (res: DataEnvelope<RawIntegration>) => mapIntegration(res.data),
+      providesTags: (_r, _e, websiteId) => [{ type: "Integration", id: websiteId }],
     }),
-    createIntegration: b.mutation<WebsiteIntegration, { websiteId: string }>({
-      query: ({ websiteId }) => ({ endpoint: "integrations.create", body: { website: websiteId } }),
-      transformResponse: (res: unknown) => normalizeIntegration(extractItem(res)),
-      invalidatesTags: [{ type: "Integration", id: "LIST" }],
+    /** POST /website-integrations → the ONLY response that contains apiKey + apiSecret. */
+    createIntegration: b.mutation<IntegrationCredentials, CreateIntegrationInput>({
+      query: ({ websiteId, apiUrl }) => ({
+        endpoint: "integrations.create",
+        body: { websiteId, apiUrl, type: "REST_API" },
+      }),
+      transformResponse: (res: DataEnvelope<RawIntegrationCredentials>) => mapIntegrationCredentials(res.data),
+      invalidatesTags: (_r, _e, { websiteId }) => [{ type: "Integration", id: websiteId }],
     }),
-    revokeIntegration: b.mutation<unknown, string>({
-      query: (id) => ({ endpoint: "integrations.revoke", pathParams: { id } }),
-      invalidatesTags: (_r, _e, id) => [
-        { type: "Integration", id },
-        { type: "Integration", id: "LIST" },
-      ],
+    /** PATCH /website-integrations/:websiteId { apiUrl } — resets status to disconnected */
+    updateIntegration: b.mutation<WebsiteIntegration, { websiteId: string; apiUrl: string }>({
+      query: ({ websiteId, apiUrl }) => ({ endpoint: "integrations.update", pathParams: { websiteId }, body: { apiUrl } }),
+      transformResponse: (res: DataEnvelope<RawIntegration>) => mapIntegration(res.data),
+      invalidatesTags: (_r, _e, { websiteId }) => [{ type: "Integration", id: websiteId }],
+    }),
+    /** DELETE /website-integrations/:websiteId — revokes the credentials */
+    deleteIntegration: b.mutation<void, string>({
+      query: (websiteId) => ({ endpoint: "integrations.delete", pathParams: { websiteId } }),
+      transformResponse: () => undefined,
+      invalidatesTags: (_r, _e, websiteId) => [{ type: "Integration", id: websiteId }],
+    }),
+    /** POST /website-integrations/:websiteId/test — backend calls apiUrl with the stored credentials */
+    testConnection: b.mutation<ConnectionTestResult, string>({
+      query: (websiteId) => ({ endpoint: "integrations.test", pathParams: { websiteId } }),
+      transformResponse: (res: DataEnvelope<{ status: IntegrationStatus; lastConnectedAt?: string }>) => ({
+        status: res.data.status,
+        lastConnectedAt: res.data.lastConnectedAt,
+        message: res.message ?? "Website connection successful",
+      }),
+      // Success or failure, the backend updates the stored status.
+      invalidatesTags: (_r, _e, websiteId) => [{ type: "Integration", id: websiteId }],
     }),
     /**
-     * GET /integration/blogs — confirmed. Uses X-API-Key / X-API-Secret and
-     * deliberately does NOT send the dashboard JWT. Keys are typed by the admin
-     * for a one-off test and never stored.
+     * Calls the external API exactly as a website would: X-API-Key + X-API-Secret,
+     * no dashboard JWT. Values are used for this request only and never stored.
      */
-    testIntegration: b.mutation<IntegrationTestResult, IntegrationTestInput>({
-      query: ({ apiKey, apiSecret }) => ({
-        endpoint: "integration.blogs",
+    checkCredentials: b.mutation<CredentialCheckResult, { apiKey: string; apiSecret: string; target: CredentialCheckTarget }>({
+      query: ({ apiKey, apiSecret, target }) => ({
+        endpoint: target,
         headers: { "X-API-Key": apiKey, "X-API-Secret": apiSecret },
       }),
-      transformResponse: (res: unknown) => {
-        const { items, total } = extractList(res);
-        return { count: total ?? items.length, sample: items[0] ?? res };
-      },
+      transformResponse: (res: DataEnvelope<unknown[]>) => ({ count: res.count ?? res.data.length, first: res.data[0] ?? null }),
     }),
   }),
 });
 
 export const {
-  useGetIntegrationsQuery,
+  useGetIntegrationQuery,
   useCreateIntegrationMutation,
-  useRevokeIntegrationMutation,
-  useTestIntegrationMutation,
+  useUpdateIntegrationMutation,
+  useDeleteIntegrationMutation,
+  useTestConnectionMutation,
+  useCheckCredentialsMutation,
 } = integrationApi;

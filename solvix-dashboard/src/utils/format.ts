@@ -18,6 +18,14 @@ export function formatDate(value?: string | number | Date | null, fallback = "�
   return d ? dateFmt.format(d) : fallback;
 }
 
+const utcDateFmt = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+/** Calendar dates stored as UTC midnight (Blog.publishDate) — shown without timezone shift. */
+export function formatCalendarDate(value?: string | number | Date | null, fallback = "—"): string {
+  const d = toDate(value);
+  return d ? utcDateFmt.format(d) : fallback;
+}
+
 export function formatDateTime(value?: string | number | Date | null, fallback = "—"): string {
   const d = toDate(value);
   return d ? dateTimeFmt.format(d) : fallback;
@@ -70,10 +78,16 @@ export function capitalize(s?: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
 }
 
-/** Date → value for <input type="date"> */
+/** Stored date → value for <input type="date"> (UTC calendar date, matching how it is saved). */
 export function toDateInput(value?: string): string {
   const d = toDate(value);
   if (!d) return "";
+  return d.toISOString().slice(0, 10);
+}
+
+/** Today's date in the user's timezone, as YYYY-MM-DD. */
+export function todayInput(): string {
+  const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }

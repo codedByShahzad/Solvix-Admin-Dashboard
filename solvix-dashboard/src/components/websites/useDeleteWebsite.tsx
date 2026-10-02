@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { ConfirmDialog } from "@/components/ui";
 import { useDeleteWebsiteMutation } from "@/store/api/websiteApi";
 import { useMutationToast } from "@/hooks/useMutationToast";
@@ -11,12 +12,16 @@ export function useDeleteWebsite(onDeleted?: () => void) {
   const [target, setTarget] = useState<Website | null>(null);
   const [remove, { isLoading }] = useDeleteWebsiteMutation();
   const run = useMutationToast();
+  const { locked, lock } = useSubmitLock();
 
   const confirm = async () => {
     if (!target) return;
-    const ok = await run(remove(target.id).unwrap(), "Website deleted successfully");
+    const res = await run(
+      remove(target.id).unwrap().then(() => true),
+      "Website deleted successfully",
+    );
     setTarget(null);
-    if (ok !== undefined) onDeleted?.();
+    if (res) onDeleted?.();
   };
 
   const dialog = (
@@ -25,13 +30,13 @@ export function useDeleteWebsite(onDeleted?: () => void) {
       title="Delete website?"
       description={
         <>
-          Are you sure you want to delete <span className="font-medium text-fg">{target?.name}</span>? Its blogs, media links and
-          integration keys may stop working. This can&apos;t be undone.
+          Are you sure you want to delete <span className="font-medium text-fg">{target?.name}</span>? This can&apos;t be undone. Its
+          blogs, media and integration keys are not deleted automatically by the backend.
         </>
       }
       confirmLabel="Delete website"
-      loading={isLoading}
-      onConfirm={confirm}
+      loading={isLoading || locked}
+      onConfirm={lock(confirm)}
       onCancel={() => setTarget(null)}
     />
   );

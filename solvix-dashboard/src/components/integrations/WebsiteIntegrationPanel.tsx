@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { KeyRound, Plus, ShieldOff, TerminalSquare } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { AlertTriangle, KeyRound, Pencil, PlugZap, RefreshCw, ShieldOff, TerminalSquare } from "lucide-react";
 import {
   Badge,
   Button,
@@ -9,118 +9,218 @@ import {
   CardHeader,
   ConfirmDialog,
   CopyButton,
-  EmptyState,
+  DetailList,
   ErrorState,
+  Field,
+  Input,
   Modal,
   Skeleton,
+  type BadgeTone,
 } from "@/components/ui";
 import {
   useCreateIntegrationMutation,
-  useGetIntegrationsQuery,
-  useRevokeIntegrationMutation,
+  useDeleteIntegrationMutation,
+  useGetIntegrationQuery,
+  useTestConnectionMutation,
+  useUpdateIntegrationMutation,
 } from "@/store/api/integrationApi";
 import { useMutationToast } from "@/hooks/useMutationToast";
+import { isNotFound } from "@/lib/api/errors";
 import { config } from "@/lib/config";
-import { formatDate, formatRelative } from "@/utils/format";
-import type { WebsiteIntegration } from "@/types";
+import { formatDateTime, formatRelative, siteUrl } from "@/utils/format";
+import type { IntegrationCredentials, IntegrationStatus } from "@/types";
+import { useSubmitLock } from "@/hooks/useSubmitLock";
 
-function mask(key: string) {
-  return key.length > 12 ? `${key.slice(0, 10)}••••••${key.slice(-4)}` : key;
-}
+const STATUS: Record<IntegrationStatus, { tone: BadgeTone; label: string }> = {
+  connected: { tone: "success", label: "Connected" },
+  disconnected: { tone: "neutral", label: "Not tested" },
+  error: { tone: "danger", label: "Connection error" },
+};
+
+const isUrl = (v: string) => /^https?:\/\/[^\s/$.?#].[^\s]*$/i.test(v.trim());
 
 /**
- * API credentials an external website (e.g. topicler.com) uses to read its
- * published blogs from GET /integration/blogs via X-API-Key / X-API-Secret.
- * Kept completely separate from dashboard JWT auth.
+ * Website integration + API credentials (website-integrations routes).
+ *
+ *  - One integration per website. The BACKEND generates apiKey + apiSecret on
+ *    POST /website-integrations and returns them in that response only
+ *    (both fields are select:false). The dashboard shows them once.
+ *  - "Regenerate" = DELETE then POST (the backend has no rotate route).
+ *  - "Test connection" = POST /:websiteId/test — the backend calls `apiUrl`
+ *    with the stored X-API-Key / X-API-Secret and records the result.
+ *  - External sites read content from /integration/blogs and /integration/media
+ *    using those two headers.
  */
-export function WebsiteIntegrationPanel({ websiteId, websiteName }: { websiteId: string; websiteName: string }) {
-  const q = useGetIntegrationsQuery();
+export function WebsiteIntegrationPanel({ websiteId, websiteName, websiteDomain }: { websiteId: string; websiteName: string; websiteDomain: string }) {
+  const q = useGetIntegrationQuery(websiteId);
   const [createIntegration, createState] = useCreateIntegrationMutation();
-  const [revokeIntegration, revokeState] = useRevokeIntegrationMutation();
+  const [updateIntegration, updateState] = useUpdateIntegrationMutation();
+  const [deleteIntegration, deleteState] = useDeleteIntegrationMutation();
+  const [testConnection, testState] = useTestConnectionMutation();
   const run = useMutationToast();
-  const [revealed, setRevealed] = useState<WebsiteIntegration | null>(null);
-  const [toRevoke, setToRevoke] = useState<WebsiteIntegration | null>(null);
+  const { locked, lock } = useSubmitLock();
 
-  const items = q.data?.items.filter((i) => i.websiteId === websiteId) ?? [];
+  const suggestedUrl = siteUrl(websiteDomain, "/api/solvix") ?? "";
+  const [apiUrl, setApiUrl] = useState(suggestedUrl);
+  const [editingUrl, setEditingUrl] = useState(false);
+  const [credentials, setCredentials] = useState<IntegrationCredentials | null>(null);
+  const [confirm, setConfirm] = useState<"revoke" | "regenerate" | null>(null);
 
-  const onCreate = async () => {
-    const created = await run(createIntegration({ websiteId }).unwrap(), "API credentials generated");
-    if (created) setRevealed(created);
+  const notSetUp = q.isError && isNotFound(q.error);
+  const integration = q.data;
+
+  const onCreate = async (e?: FormEvent) => {
+    e?.preventDefault();
+    const created = await run(createIntegration({ websiteId, apiUrl: apiUrl.trim() }).unwrap(), "API credentials generated");
+    if (created) setCredentials(created);
   };
 
-  const onRevoke = async () => {
-    if (!toRevoke) return;
-    await run(revokeIntegration(toRevoke.id).unwrap(), "Credentials revoked");
-    setToRevoke(null);
+  const onSaveUrl = async (e?: FormEvent) => {
+    e?.preventDefault();
+    const ok = await run(updateIntegration({ websiteId, apiUrl: apiUrl.trim() }).unwrap(), "Integration updated successfully");
+    if (ok) setEditingUrl(false);
   };
 
-  const snippet = `const res = await fetch("${config.apiUrl}/integration/blogs", {
+  const onTest = async () => {
+    await run(testConnection(websiteId).unwrap(), "Website connection successful");
+  };
+
+  const onConfirm = async () => {
+    if (!integration) return;
+    if (confirm === "revoke") {
+      await run(deleteIntegration(websiteId).unwrap().then(() => true), "Integration deleted — credentials revoked");
+    } else if (confirm === "regenerate") {
+      const url = integration.apiUrl;
+      const deleted = await run(deleteIntegration(websiteId).unwrap().then(() => true), "Old credentials revoked");
+      if (deleted) {
+        const created = await run(createIntegration({ websiteId, apiUrl: url }).unwrap(), "New API credentials generated");
+        if (created) setCredentials(created);
+      }
+    }
+    setConfirm(null);
+  };
+
+  const snippet = `// Server-side only — never expose the secret to the browser.
+const res = await fetch("${config.apiUrl}/integration/blogs", {
   headers: {
     "X-API-Key": process.env.SOLVIX_API_KEY,
     "X-API-Secret": process.env.SOLVIX_API_SECRET,
   },
-  // Server-side only — never expose the secret to the browser.
-});`;
+});
+const { data: blogs } = await res.json(); // published blogs for ${websiteName}`;
 
   return (
     <Card>
       <CardHeader
         icon={<KeyRound />}
         title="Website integration"
-        description={`Credentials ${websiteName} uses to fetch its published blogs.`}
-        action={
-          <Button size="sm" variant="secondary" leftIcon={<Plus />} onClick={onCreate} loading={createState.isLoading}>
-            Generate keys
-          </Button>
-        }
+        description={`API credentials ${websiteName} uses to read its content from Solvix.`}
+        action={integration ? <Badge tone={STATUS[integration.status].tone} dot>{STATUS[integration.status].label}</Badge> : undefined}
       />
-      <div className="p-5">
+      <div className="space-y-5 p-5">
         {q.isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-14 w-full rounded-lg" />
-          </div>
-        ) : q.isError ? (
+          <Skeleton className="h-28 w-full rounded-xl" />
+        ) : notSetUp ? (
+          <form onSubmit={lock(onCreate)} className="space-y-4">
+            <div className="flex items-start gap-3 rounded-xl border border-dashed border-border-strong bg-surface-2/40 p-4">
+              <KeyRound className="mt-0.5 size-5 shrink-0 text-brand" />
+              <div className="text-sm">
+                <p className="font-medium text-fg">No integration yet</p>
+                <p className="mt-0.5 text-muted">
+                  Generating an integration creates an API key and secret on the server. The secret is shown <strong>once</strong>.
+                </p>
+              </div>
+            </div>
+            <Field
+              label="Website API URL"
+              htmlFor="apiUrl"
+              required
+              error={apiUrl && !isUrl(apiUrl) ? "Enter a full URL starting with https://" : undefined}
+              hint="An endpoint on the website that Solvix calls when you click “Test connection”."
+            >
+              <Input id="apiUrl" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} placeholder="https://topicler.com/api/solvix" />
+            </Field>
+            <div className="flex justify-end">
+              <Button type="submit" loading={createState.isLoading || locked} disabled={!isUrl(apiUrl)} leftIcon={<KeyRound />}>
+                Generate API credentials
+              </Button>
+            </div>
+          </form>
+        ) : q.isError || !integration ? (
           <ErrorState error={q.error} onRetry={() => q.refetch()} compact />
-        ) : items.length === 0 ? (
-          <EmptyState
-            compact
-            icon={<KeyRound />}
-            title="No API credentials yet"
-            description="Generate a key pair so this website can pull its published blogs from Solvix."
-          />
         ) : (
-          <ul className="space-y-2.5">
-            {items.map((it) => (
-              <li key={it.id} className="flex flex-col gap-3 rounded-xl border border-border bg-surface-2/40 p-3.5 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <code className="truncate font-mono text-[13px] text-fg">{mask(it.apiKey)}</code>
-                    <Badge tone={it.isActive ? "success" : "danger"} dot>
-                      {it.isActive ? "Active" : "Revoked"}
-                    </Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-muted">
-                    Created {formatDate(it.createdAt)} · Last used {formatRelative(it.lastUsedAt, "never")}
-                  </p>
+          <>
+            {editingUrl ? (
+              <form onSubmit={lock(onSaveUrl)} className="space-y-3">
+                <Field label="Website API URL" htmlFor="editApiUrl" error={apiUrl && !isUrl(apiUrl) ? "Enter a full URL starting with https://" : undefined}>
+                  <Input id="editApiUrl" value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} autoFocus />
+                </Field>
+                <div className="flex justify-end gap-2">
+                  <Button variant="secondary" size="sm" onClick={() => setEditingUrl(false)} disabled={updateState.isLoading}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" size="sm" loading={updateState.isLoading || locked} disabled={!isUrl(apiUrl)}>
+                    Save URL
+                  </Button>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <CopyButton value={it.apiKey} label="Copy key" toastMessage="API key copied" variant="secondary" />
-                  {it.isActive && (
-                    <Button size="sm" variant="danger-soft" leftIcon={<ShieldOff />} onClick={() => setToRevoke(it)}>
-                      Revoke
-                    </Button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+              </form>
+            ) : (
+              <DetailList
+                items={[
+                  {
+                    label: "API URL",
+                    value: (
+                      <span className="inline-flex items-center gap-1">
+                        <code className="font-mono text-xs">{integration.apiUrl}</code>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="size-6"
+                          aria-label="Edit API URL"
+                          onClick={() => {
+                            setApiUrl(integration.apiUrl);
+                            setEditingUrl(true);
+                          }}
+                        >
+                          <Pencil />
+                        </Button>
+                      </span>
+                    ),
+                  },
+                  { label: "Type", value: integration.type },
+                  { label: "API key & secret", value: <span className="text-muted">Hidden — shown once at generation</span> },
+                  { label: "Last connected", value: formatRelative(integration.lastConnectedAt, "Never") },
+                  { label: "Created", value: formatDateTime(integration.createdAt) },
+                ]}
+              />
+            )}
+
+            {integration.status === "error" && (
+              <div className="flex items-start gap-2.5 rounded-xl border border-danger/20 bg-danger-soft px-3.5 py-3 text-sm text-fg">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-danger" />
+                The last connection test failed. Check that the API URL is reachable and accepts the Solvix credentials.
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" size="sm" leftIcon={<PlugZap />} onClick={lock(onTest)} loading={testState.isLoading || locked}>
+                Test connection
+              </Button>
+              <Button variant="secondary" size="sm" leftIcon={<RefreshCw />} onClick={() => setConfirm("regenerate")} disabled={deleteState.isLoading || createState.isLoading}>
+                Regenerate keys
+              </Button>
+              <Button variant="danger-soft" size="sm" leftIcon={<ShieldOff />} onClick={() => setConfirm("revoke")}>
+                Revoke
+              </Button>
+            </div>
+          </>
         )}
 
-        <div className="mt-5 overflow-hidden rounded-xl border border-border">
+        <div className="overflow-hidden rounded-xl border border-border">
           <div className="flex items-center justify-between border-b border-border bg-surface-2/60 px-3.5 py-2">
             <span className="flex items-center gap-2 text-xs font-medium text-muted">
               <TerminalSquare className="size-3.5" />
-              Usage on the website (server-side)
+              Reading content from the website&apos;s server
             </span>
             <CopyButton value={snippet} toastMessage="Snippet copied" />
           </div>
@@ -129,38 +229,54 @@ export function WebsiteIntegrationPanel({ websiteId, websiteName }: { websiteId:
       </div>
 
       <Modal
-        open={!!revealed}
-        onClose={() => setRevealed(null)}
+        open={!!credentials}
+        onClose={() => setCredentials(null)}
+        dismissible={false}
         title="Save these credentials now"
-        description="For security, the secret may not be shown again. Store both values in the website's server environment."
-        footer={<Button onClick={() => setRevealed(null)}>I&apos;ve saved them</Button>}
+        description="This is the only time the API secret is shown. Store both values in the website's server environment variables."
+        footer={<Button onClick={() => setCredentials(null)}>I&apos;ve saved them</Button>}
       >
-        {revealed && (
+        {credentials && (
           <div className="space-y-3 pb-2">
-            {[
-              ["X-API-Key", revealed.apiKey],
-              ["X-API-Secret", revealed.apiSecret ?? "— not returned by the server —"],
-            ].map(([label, value]) => (
+            {(
+              [
+                ["X-API-Key", "SOLVIX_API_KEY", credentials.apiKey],
+                ["X-API-Secret", "SOLVIX_API_SECRET", credentials.apiSecret],
+              ] as const
+            ).map(([label, envName, value]) => (
               <div key={label}>
-                <div className="mb-1 text-xs font-medium text-muted">{label}</div>
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <span className="font-medium text-muted">{label}</span>
+                  <code className="font-mono text-subtle">{envName}</code>
+                </div>
                 <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2">
-                  <code className="min-w-0 flex-1 break-all font-mono text-[13px] text-fg">{value}</code>
-                  <CopyButton value={value} />
+                  <code className="min-w-0 flex-1 break-all font-mono text-[12px] text-fg">{value}</code>
+                  <CopyButton value={value} toastMessage={`${label} copied`} />
                 </div>
               </div>
             ))}
+            <CopyButton
+              value={`SOLVIX_API_KEY=${credentials.apiKey}\nSOLVIX_API_SECRET=${credentials.apiSecret}`}
+              label="Copy as .env lines"
+              variant="secondary"
+              toastMessage="Copied both values"
+            />
           </div>
         )}
       </Modal>
 
       <ConfirmDialog
-        open={!!toRevoke}
-        title="Revoke these credentials?"
-        description="The website using this key will immediately lose access to its blogs from Solvix."
-        confirmLabel="Revoke"
-        loading={revokeState.isLoading}
-        onConfirm={onRevoke}
-        onCancel={() => setToRevoke(null)}
+        open={confirm !== null}
+        title={confirm === "regenerate" ? "Regenerate API credentials?" : "Revoke integration?"}
+        description={
+          confirm === "regenerate"
+            ? "The current key and secret stop working immediately and new ones are generated. Update the website's environment variables afterwards."
+            : `${websiteName} will immediately lose access to its content from Solvix. You can generate new credentials later.`
+        }
+        confirmLabel={confirm === "regenerate" ? "Regenerate" : "Revoke"}
+        loading={deleteState.isLoading || createState.isLoading || locked}
+        onConfirm={lock(onConfirm)}
+        onCancel={() => setConfirm(null)}
       />
     </Card>
   );

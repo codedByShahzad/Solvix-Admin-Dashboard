@@ -3,3 +3,4 @@ export { useDebounce } from "./useDebounce";
 export { useDisclosure } from "./useDisclosure";
 export { useMediaQuery } from "./useMediaQuery";
 export { useMutationToast } from "./useMutationToast";
+export { useSubmitLock } from "./useSubmitLock";

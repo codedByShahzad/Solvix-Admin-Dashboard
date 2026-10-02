@@ -2,11 +2,9 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { AlertCircle, Cable, Inbox, Loader2, RefreshCw, SearchX, ShieldAlert, WifiOff } from "lucide-react";
+import { AlertCircle, Inbox, Loader2, RefreshCw, SearchX, ShieldAlert, WifiOff } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { isApiError, isForbidden, isNotFound, isUnconfirmed, type ApiError } from "@/lib/api/errors";
-import { ENDPOINTS, type EndpointKey } from "@/lib/api/endpoints";
-import { useAppSelector } from "@/store/hooks";
+import { isApiError, isForbidden, isNotFound, type ApiError } from "@/lib/api/errors";
 import { Button, ButtonLink } from "./Button";
 
 function StateShell({
@@ -88,33 +86,14 @@ export function LoadingState({ label = "Loading…", className }: { label?: stri
   );
 }
 
-export function EndpointPending({ endpoint, compact, className }: { endpoint?: EndpointKey; compact?: boolean; className?: string }) {
-  return (
-    <StateShell
-      compact={compact}
-      className={className}
-      tone="warning"
-      icon={<Cable />}
-      title="Backend route pending"
-      description={
-        <>
-          This view is built and ready. It needs the exact backend route for{" "}
-          <code className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-fg">{endpoint ?? "this endpoint"}</code>{" "}
-          in <code className="font-mono text-xs text-fg">src/lib/api/endpoints.ts</code>.
-        </>
-      }
-    />
-  );
-}
-
-export function ForbiddenState({ compact }: { compact?: boolean }) {
+export function ForbiddenState({ compact, message }: { compact?: boolean; message?: string }) {
   return (
     <StateShell
       compact={compact}
       tone="danger"
       icon={<ShieldAlert />}
       title="You don't have access"
-      description="Your account doesn't have permission to view this. Ask an admin if you think this is a mistake."
+      description={message ?? "Your account doesn't have permission to view this. Ask an admin if you think this is a mistake."}
       action={
         <ButtonLink href="/dashboard" variant="secondary" size="sm">
           Back to dashboard
@@ -137,8 +116,7 @@ export function ErrorState({
   className?: string;
   notFoundHref?: string;
 }) {
-  if (isUnconfirmed(error)) return <EndpointPending endpoint={error.endpoint} compact={compact} className={className} />;
-  if (isForbidden(error)) return <ForbiddenState compact={compact} />;
+  if (isForbidden(error)) return <ForbiddenState compact={compact} message={(error as ApiError).message} />;
   if (isNotFound(error)) {
     return (
       <StateShell
@@ -146,7 +124,7 @@ export function ErrorState({
         className={className}
         icon={<SearchX />}
         title="Not found"
-        description="This item doesn't exist or may have been deleted."
+        description={(isApiError(error) && error.message) || "This item doesn't exist or may have been deleted."}
         action={
           notFoundHref && (
             <Link href={notFoundHref} className="text-sm font-medium text-brand hover:underline">
@@ -217,28 +195,4 @@ export function QueryState<T>({
   }
   if (isEmpty?.(query.data) && empty) return <>{empty}</>;
   return <>{children(query.data)}</>;
-}
-
-/** Inline notice for forms whose submit route isn't connected yet. */
-export function EndpointNotice({ endpoints }: { endpoints: EndpointKey[] }) {
-  const isDemo = useAppSelector((s) => s.auth.mode === "demo");
-  const pending = endpoints.filter((k) => ENDPOINTS[k] === null);
-  if (isDemo || !pending.length) return null;
-  return (
-    <div className="flex items-start gap-3 rounded-xl border border-warning/25 bg-warning-soft px-4 py-3 text-sm">
-      <Cable className="mt-0.5 size-4 shrink-0 text-warning" />
-      <p className="text-fg">
-        <span className="font-medium">Backend route pending: </span>
-        <span className="text-muted">
-          {pending.map((k, i) => (
-            <span key={k}>
-              {i > 0 && ", "}
-              <code className="font-mono text-xs text-fg">{k}</code>
-            </span>
-          ))}
-          . The form works, but saving needs route confirmation in <code className="font-mono text-xs text-fg">src/lib/api/endpoints.ts</code>.
-        </span>
-      </p>
-    </div>
-  );
 }

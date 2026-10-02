@@ -9,13 +9,9 @@ const GRADIENTS = [
   "from-[#BE185D] to-[#F472B6]",
 ];
 
-export function WebsiteAvatar({ website, size = "md" }: { website: Pick<Website, "name" | "logo" | "id">; size?: "sm" | "md" | "lg" }) {
+export function WebsiteAvatar({ website, size = "md" }: { website: Pick<Website, "name" | "id">; size?: "sm" | "md" | "lg" }) {
   const sizes = { sm: "size-7 text-xs rounded-md", md: "size-9 text-sm rounded-lg", lg: "size-11 text-base rounded-xl" };
   const idx = [...(website.id || website.name)].reduce((a, c) => a + c.charCodeAt(0), 0) % GRADIENTS.length;
-  if (website.logo) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={website.logo} alt="" className={cn(sizes[size], "shrink-0 object-cover")} />;
-  }
   return (
     <span
       aria-hidden

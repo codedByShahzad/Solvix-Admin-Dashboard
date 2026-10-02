@@ -1,34 +1,44 @@
 import { baseApi } from "./baseApi";
-import { extractItem, normalizeUser } from "@/lib/api/normalize";
-import type { User } from "@/types";
+import { mapAuthUser, type RawAuthUser } from "@/lib/api/mappers";
+import type { Role, User } from "@/types";
 
 export interface LoginInput {
   email: string;
   password: string;
 }
 
-export interface ChangePasswordInput {
-  currentPassword: string;
-  newPassword: string;
+export interface LoginResult {
+  token: string;
+  user: User;
+}
+
+export interface RegisterInput {
+  name: string;
+  email: string;
+  password: string;
+  role: Role;
 }
 
 export const authApi = baseApi.injectEndpoints({
   endpoints: (b) => ({
-    /** POST /auth/login — confirmed. Raw response is parsed by parseLoginResponse. */
-    login: b.mutation<unknown, LoginInput>({
+    /** POST /auth/login → { message, token, user } */
+    login: b.mutation<LoginResult, LoginInput>({
       query: (body) => ({ endpoint: "auth.login", body }),
+      transformResponse: (res: { token: string; user: RawAuthUser }) => ({ token: res.token, user: mapAuthUser(res.user) }),
     }),
-    /** NEEDS BACKEND ROUTE CONFIRMATION ("auth.me") */
-    getMe: b.query<User | null, void>({
+    /** POST /auth/register → { message, user } (no token returned) */
+    register: b.mutation<User, RegisterInput>({
+      query: (body) => ({ endpoint: "auth.register", body }),
+      transformResponse: (res: { user: RawAuthUser }) => mapAuthUser(res.user),
+      invalidatesTags: [{ type: "Editor", id: "LIST" }],
+    }),
+    /** GET /auth/me → { user } */
+    getMe: b.query<User, void>({
       query: () => ({ endpoint: "auth.me" }),
-      transformResponse: (res: unknown) => normalizeUser(extractItem(extractItem(res).user ?? res)),
+      transformResponse: (res: { user: RawAuthUser }) => mapAuthUser(res.user),
       providesTags: ["User"],
-    }),
-    /** NEEDS BACKEND ROUTE CONFIRMATION ("auth.changePassword") */
-    changePassword: b.mutation<unknown, ChangePasswordInput>({
-      query: (body) => ({ endpoint: "auth.changePassword", body }),
     }),
   }),
 });
 
-export const { useLoginMutation, useGetMeQuery, useChangePasswordMutation } = authApi;
+export const { useLoginMutation, useRegisterMutation, useGetMeQuery } = authApi;

@@ -16,6 +16,7 @@ export interface IWebsiteIntegration extends Document {
   lastConnectedAt?: Date;
 
   createdAt: Date;
+
   updatedAt: Date;
 }
 
@@ -43,6 +44,8 @@ const websiteIntegrationSchema = new Schema<IWebsiteIntegration>(
 
     apiKey: {
       type: String,
+      unique: true,
+      sparse: true,
       select: false,
     },
 

@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Cable } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Skeleton } from "./Skeleton";
 
-export type StatState = "loading" | "ready" | "pending" | "error";
+export type StatState = "loading" | "ready" | "error";
 
 export function StatCard({
   label,
@@ -40,14 +40,8 @@ export function StatCard({
       <div>
         {state === "loading" && <Skeleton className="h-8 w-16" />}
         {state === "ready" && <div className="text-[28px] font-semibold leading-none tracking-tight tabular-nums text-fg">{value}</div>}
-        {state === "pending" && (
-          <div className="flex items-center gap-1.5 text-sm font-medium text-warning" title="This statistic needs its backend route confirmed">
-            <Cable className="size-4" />
-            Needs endpoint
-          </div>
-        )}
         {state === "error" && <div className="text-sm font-medium text-subtle">Unavailable</div>}
-        <div className="mt-1.5 min-h-[18px] text-xs text-muted">{state === "ready" ? hint : state === "pending" ? "Route not connected yet" : null}</div>
+        <div className="mt-1.5 min-h-[18px] text-xs text-muted">{state === "ready" ? hint : null}</div>
       </div>
     </div>
   );

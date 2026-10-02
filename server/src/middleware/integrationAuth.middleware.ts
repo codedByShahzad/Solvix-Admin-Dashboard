@@ -1,48 +1,63 @@
 import { Request, Response, NextFunction } from "express";
+import WebsiteIntegration from "../models/websiteIntegration.model";
 
-export const integrationAuth = (
+export const integrationAuth = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
     // Get credentials from request headers
-    const apiKey = req.headers["x-api-key"];
-    const apiSecret = req.headers["x-api-secret"];
+    const apiKey = req.header("X-API-Key");
+    const apiSecret = req.header("X-API-Secret");
 
-    // Get expected credentials from environment variables
-    const expectedApiKey = process.env.SOLVIX_API_KEY;
-    const expectedApiSecret = process.env.SOLVIX_API_SECRET;
+    // Check that credentials were provided
+    if (!apiKey || !apiSecret) {
+      return res.status(401).json({
+        success: false,
+        message: "API key and API secret are required",
+      });
+    }
 
-    // Check server configuration
-    if (!expectedApiKey || !expectedApiSecret) {
-      console.error("❌ Solvix integration credentials are not configured");
+    // Find the integration using the API key
+    const integration = await WebsiteIntegration.findOne({
+      apiKey,
+    }).select("+apiKey +apiSecret");
 
-      return res.status(500).json({
+    // API key doesn't exist
+    if (!integration) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid API key",
+      });
+    }
+
+    // Make sure the integration has a secret
+    if (!integration.apiSecret) {
+      return res.status(401).json({
         success: false,
         message: "Integration credentials are not configured",
       });
     }
 
-    // Check credentials
-    if (
-      apiKey !== expectedApiKey ||
-      apiSecret !== expectedApiSecret
-    ) {
-      console.error("❌ Invalid integration credentials");
-      console.error("Path:", req.originalUrl);
-      console.error("API Key received:", !!apiKey);
-      console.error("API Secret received:", !!apiSecret);
-
+    // Check API secret
+    if (integration.apiSecret !== apiSecret) {
       return res.status(401).json({
         success: false,
-        message: "Invalid integration credentials",
+        message: "Invalid API secret",
       });
     }
 
     // Authentication successful
     console.log("✅ Integration authentication successful");
+    console.log("Website ID:", integration.websiteId.toString());
     console.log("Path:", req.originalUrl);
+
+    // Attach integration information to request
+    req.integration = {
+      integrationId: integration._id.toString(),
+      websiteId: integration.websiteId.toString(),
+    };
 
     next();
   } catch (error) {

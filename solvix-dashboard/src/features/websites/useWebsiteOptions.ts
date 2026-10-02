@@ -2,32 +2,23 @@
 
 import { useMemo } from "react";
 import { useGetWebsitesQuery } from "@/store/api/websiteApi";
-import { useCurrentUser } from "@/features/auth/useAuth";
-import type { Ref } from "@/types";
+import type { Website } from "@/types";
 
 /**
- * Websites the current user can assign content to.
- *  - Admin: the websites list endpoint.
- *  - Editor: the websites attached to their user (from the login response),
- *    because editors usually can't list all websites.
- * `unavailable` = no source of website options, so forms fall back to a Website ID input.
+ * Websites the current user can put content on, from GET /websites
+ * (admins: websites they own · editors: websites assigned to them).
  */
 export function useWebsiteOptions() {
-  const user = useCurrentUser();
-  const isAdmin = user?.role === "admin";
-  const q = useGetWebsitesQuery(undefined, { skip: !isAdmin });
-
+  const q = useGetWebsitesQuery();
   return useMemo(() => {
-    const websites: Ref[] = isAdmin
-      ? (q.data?.items.map((w) => ({ id: w.id, name: w.name, domain: w.domain })) ?? [])
-      : (user?.websites ?? []);
-    const options = websites.map((w) => ({ value: w.id, label: w.name ? `${w.name}${w.domain ? ` · ${w.domain}` : ""}` : w.id }));
+    const websites: Website[] = q.data ?? [];
     return {
       websites,
-      options,
-      isLoading: isAdmin && q.isLoading,
-      unavailable: !(isAdmin && q.isLoading) && options.length === 0,
+      options: websites.map((w) => ({ value: w.id, label: `${w.name} · ${w.domain.replace(/^https?:\/\//, "")}` })),
+      isLoading: q.isLoading,
+      isError: q.isError,
+      error: q.error,
       nameOf: (id?: string) => websites.find((w) => w.id === id)?.name,
     };
-  }, [isAdmin, q.data, q.isLoading, user?.websites]);
+  }, [q.data, q.isLoading, q.isError, q.error]);
 }

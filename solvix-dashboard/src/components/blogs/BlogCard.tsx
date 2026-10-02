@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Clock, FileText } from "lucide-react";
 import { StatusBadge } from "@/components/ui";
-import { formatDate } from "@/utils/format";
+import { formatCalendarDate, formatDate } from "@/utils/format";
 import type { Blog } from "@/types";
 
 export function BlogCard({ blog }: { blog: Blog }) {
@@ -31,11 +31,11 @@ export function BlogCard({ blog }: { blog: Blog }) {
         <h3 className="line-clamp-2 font-semibold leading-snug text-fg group-hover:text-brand">{blog.title}</h3>
         {blog.subtitle && <p className="mt-1 line-clamp-2 text-sm text-muted">{blog.subtitle}</p>}
         <div className="mt-auto flex items-center justify-between pt-4 text-xs text-muted">
-          <span>{formatDate(blog.publishDate ?? blog.updatedAt)}</span>
+          <span>{blog.publishDate ? formatCalendarDate(blog.publishDate) : formatDate(blog.updatedAt)}</span>
           {blog.readingTime ? (
             <span className="flex items-center gap-1">
               <Clock className="size-3" />
-              {blog.readingTime} min
+              {blog.readingTime}
             </span>
           ) : null}
         </div>

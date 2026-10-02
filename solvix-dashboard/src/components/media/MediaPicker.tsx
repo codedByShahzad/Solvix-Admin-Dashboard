@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { Check, ImageOff } from "lucide-react";
 import { Button, EmptyState, ErrorState, Modal, SearchInput, Skeleton } from "@/components/ui";
 import { useGetMediaListQuery } from "@/store/api/mediaApi";
-import { mediaKind } from "@/features/media/utils";
 import { cn } from "@/lib/cn";
 import type { Media } from "@/types";
 
@@ -26,9 +25,8 @@ export function MediaPicker({
 
   const images = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return (q.data?.items ?? [])
-      .filter((m) => mediaKind(m) === "image")
-      .filter((m) => !term || m.filename.toLowerCase().includes(term) || (m.alt ?? "").toLowerCase().includes(term))
+    return (q.data ?? [])
+      .filter((m) => !term || m.filename.toLowerCase().includes(term) || (m.altText ?? "").toLowerCase().includes(term))
       .sort((a, b) => Number(b.websiteId === websiteId) - Number(a.websiteId === websiteId));
   }, [q.data, search, websiteId]);
 
@@ -92,7 +90,7 @@ export function MediaPicker({
                   )}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={m.url} alt={m.alt ?? ""} className="aspect-square w-full object-cover" />
+                  <img src={m.url} alt={m.altText ?? ""} className="aspect-square w-full object-cover" />
                   <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-2 pb-1.5 pt-5 text-2xs font-medium text-white">
                     {m.filename}
                   </span>

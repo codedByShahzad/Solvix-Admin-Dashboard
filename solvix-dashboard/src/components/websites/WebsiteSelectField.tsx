@@ -1,33 +1,39 @@
 "use client";
 
-import { Field, Input, Select, Skeleton } from "@/components/ui";
+import { useEffect } from "react";
+import Link from "next/link";
+import { Field, Select, Skeleton } from "@/components/ui";
 import { useWebsiteOptions } from "@/features/websites/useWebsiteOptions";
+import { useIsAdmin } from "@/features/auth/useAuth";
 
-/**
- * Website picker used by blog / media / editor forms. Falls back to a raw
- * Website ID input when no website list is available (route pending or editor
- * without assigned websites in their session).
- */
+/** Website picker for blog / media forms, fed by GET /websites. */
 export function WebsiteSelectField({
   value,
   onChange,
   error,
   required,
   label = "Website",
-  allowEmpty,
-  emptyLabel = "No website",
   id = "website",
+  disabled,
+  hint,
 }: {
   value: string;
   onChange: (v: string) => void;
   error?: string;
   required?: boolean;
   label?: string;
-  allowEmpty?: boolean;
-  emptyLabel?: string;
   id?: string;
+  disabled?: boolean;
+  hint?: string;
 }) {
-  const { options, isLoading, unavailable } = useWebsiteOptions();
+  const { options, isLoading, isError } = useWebsiteOptions();
+  const isAdmin = useIsAdmin();
+
+  // Only one website available (typical for editors) → select it automatically.
+  const only = options.length === 1 ? options[0].value : "";
+  useEffect(() => {
+    if (!value && only && !disabled) onChange(only);
+  }, [value, only, disabled, onChange]);
 
   if (isLoading) {
     return (
@@ -37,30 +43,34 @@ export function WebsiteSelectField({
     );
   }
 
-  if (unavailable) {
-    return (
-      <Field
-        label={`${label} ID`}
-        htmlFor={id}
-        required={required}
-        error={error}
-        hint="The website list isn't available yet, so enter the website's ID."
-      >
-        <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder="e.g. 665f1c2e9b1e8a0012ab34cd" invalid={!!error} className="font-mono text-[13px]" />
-      </Field>
-    );
-  }
+  const emptyHint = isError
+    ? "Couldn't load websites."
+    : options.length === 0
+      ? isAdmin
+        ? undefined
+        : "You aren't assigned to any website yet — ask an admin."
+      : hint;
 
   return (
-    <Field label={label} htmlFor={id} required={required} error={error}>
+    <Field label={label} htmlFor={id} required={required} error={error} hint={emptyHint}>
       <Select
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         options={options}
-        placeholder={allowEmpty ? emptyLabel : "Select a website"}
+        placeholder={options.length ? "Select a website" : "No websites available"}
         invalid={!!error}
+        disabled={disabled || options.length === 0}
       />
+      {isAdmin && options.length === 0 && !isError && (
+        <p className="text-xs text-muted">
+          No websites yet.{" "}
+          <Link href="/dashboard/websites/create" className="font-medium text-brand hover:underline">
+            Add a website
+          </Link>{" "}
+          first.
+        </p>
+      )}
     </Field>
   );
 }

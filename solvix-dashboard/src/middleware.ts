@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 /**
  * Route protection (runs before any page renders).
  *  - /dashboard/*  → requires a session cookie, else /login?next=…
- *  - /login        → signed-in users go straight to /dashboard
+ *  - /login, /register → signed-in users go straight to /dashboard
  *  - admin-only sections → editors are sent to /unauthorized
  *
  * This is a UX guard only. The backend verifies the JWT and role on every request.
@@ -12,11 +12,9 @@ import { NextResponse, type NextRequest } from "next/server";
 const TOKEN_COOKIE = "solvix_token";
 const ROLE_COOKIE = "solvix_role";
 const ADMIN_ONLY = ["/dashboard/websites", "/dashboard/editors", "/dashboard/settings"];
-const DEMO_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DEMO !== "false";
 
 function tokenIsUsable(token: string | undefined): boolean {
   if (!token) return false;
-  if (token.startsWith("demo-")) return DEMO_ENABLED;
   const parts = token.split(".");
   if (parts.length !== 3) return true; // opaque token — let the backend decide
   try {
@@ -56,7 +54,7 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  if (pathname === "/login" && authed) {
+  if ((pathname === "/login" || pathname === "/register") && authed) {
     const url = req.nextUrl.clone();
     url.pathname = "/dashboard";
     url.search = "";
@@ -67,5 +65,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login"],
+  matcher: ["/dashboard/:path*", "/login", "/register"],
 };

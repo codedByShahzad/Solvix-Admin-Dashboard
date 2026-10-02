@@ -1,137 +1,100 @@
 /**
- * ─────────────────────────────────────────────────────────────────────────────
- *  BACKEND ROUTE REGISTRY — the ONLY place backend paths live.
- * ─────────────────────────────────────────────────────────────────────────────
+ * BACKEND ROUTE REGISTRY — the only place backend paths live.
  *
- *  Paths are relative to NEXT_PUBLIC_API_URL (which already ends in /api/v1).
+ * Every route below was traced from server/src/routes/*.ts.
+ * Paths are relative to NEXT_PUBLIC_API_URL (which already ends in /api/v1).
  *
- *  `null` = NEEDS BACKEND ROUTE CONFIRMATION.
- *  Unconfirmed endpoints make no network call; the UI shows a clear
- *  "Backend route pending" state instead of guessing a URL.
- *
- *  To connect an endpoint, replace `null` with the exact route from the
- *  Express router, using `:param` placeholders, e.g.
- *
- *      "blogs.get": { method: "GET", path: "/blogs/:id" },
- *
- *  Settings → Backend connection lists which endpoints are still pending.
+ * auth: true  → the dashboard JWT is sent as `Authorization: Bearer <token>`
+ * auth: false → no JWT (public routes, or the X-API-Key/X-API-Secret routes)
  */
 
-export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
 export interface EndpointDef {
   method: HttpMethod;
   path: string;
-  /** false = do not attach the dashboard JWT (external integration routes). */
-  auth?: boolean;
+  auth: boolean;
+  /** Who the backend allows. Shown in Settings; the backend enforces it. */
+  access: "public" | "admin" | "admin+editor" | "api-key";
 }
 
-export type EndpointKey =
-  // /api/v1/auth
-  | "auth.login"
-  | "auth.me"
-  | "auth.changePassword"
-  // /api/v1/websites
-  | "websites.list"
-  | "websites.get"
-  | "websites.create"
-  | "websites.update"
-  | "websites.delete"
-  // /api/v1/blogs
-  | "blogs.list"
-  | "blogs.get"
-  | "blogs.create"
-  | "blogs.update"
-  | "blogs.delete"
-  // /api/v1/media
-  | "media.list"
-  | "media.get"
-  | "media.upload"
-  | "media.update"
-  | "media.delete"
-  // /api/v1/admin (editor management)
-  | "editors.list"
-  | "editors.get"
-  | "editors.create"
-  | "editors.update"
-  | "editors.delete"
-  // /api/v1/website-integrations
-  | "integrations.list"
-  | "integrations.create"
-  | "integrations.revoke"
-  // /api/v1/integration (external, X-API-Key / X-API-Secret)
-  | "integration.blogs";
+export const ENDPOINTS = {
+  // auth.routes.ts
+  "auth.register": { method: "POST", path: "/auth/register", auth: false, access: "public" },
+  "auth.login": { method: "POST", path: "/auth/login", auth: false, access: "public" },
+  "auth.me": { method: "GET", path: "/auth/me", auth: true, access: "admin+editor" },
 
-export const ENDPOINTS: Record<EndpointKey, EndpointDef | null> = {
-  // ── Confirmed ─────────────────────────────────────────────────────────────
-  "auth.login": { method: "POST", path: "/auth/login", auth: false },
-  "integration.blogs": { method: "GET", path: "/integration/blogs", auth: false },
+  // admin.routes.ts
+  "admin.editors": { method: "GET", path: "/admin/editors", auth: true, access: "admin" },
 
-  // ── NEEDS BACKEND ROUTE CONFIRMATION ──────────────────────────────────────
-  "auth.me": null,
-  "auth.changePassword": null,
+  // website.routes.ts
+  "websites.list": { method: "GET", path: "/websites", auth: true, access: "admin+editor" },
+  "websites.get": { method: "GET", path: "/websites/:id", auth: true, access: "admin+editor" },
+  "websites.create": { method: "POST", path: "/websites", auth: true, access: "admin" },
+  "websites.update": { method: "PATCH", path: "/websites/:id", auth: true, access: "admin" },
+  "websites.delete": { method: "DELETE", path: "/websites/:id", auth: true, access: "admin" },
+  "websites.assignEditor": { method: "PATCH", path: "/websites/:id/assign-editor", auth: true, access: "admin" },
+  "websites.transferOwnership": { method: "PATCH", path: "/websites/:id/owner", auth: true, access: "admin" },
 
-  "websites.list": null,
-  "websites.get": null,
-  "websites.create": null,
-  "websites.update": null,
-  "websites.delete": null,
+  // blog.routes.ts
+  "blogs.list": { method: "GET", path: "/blogs", auth: true, access: "admin+editor" },
+  "blogs.get": { method: "GET", path: "/blogs/:id", auth: true, access: "admin+editor" },
+  "blogs.create": { method: "POST", path: "/blogs", auth: true, access: "admin+editor" },
+  "blogs.update": { method: "PATCH", path: "/blogs/:id", auth: true, access: "admin+editor" },
+  "blogs.delete": { method: "DELETE", path: "/blogs/:id", auth: true, access: "admin+editor" },
 
-  "blogs.list": null,
-  "blogs.get": null,
-  "blogs.create": null,
-  "blogs.update": null,
-  "blogs.delete": null,
+  // media.routes.ts (multipart field: "image")
+  "media.list": { method: "GET", path: "/media", auth: true, access: "admin+editor" },
+  "media.get": { method: "GET", path: "/media/:id", auth: true, access: "admin+editor" },
+  "media.upload": { method: "POST", path: "/media", auth: true, access: "admin+editor" },
+  "media.update": { method: "PATCH", path: "/media/:id", auth: true, access: "admin+editor" },
+  "media.delete": { method: "DELETE", path: "/media/:id", auth: true, access: "admin" },
 
-  "media.list": null,
-  "media.get": null,
-  "media.upload": null,
-  "media.update": null,
-  "media.delete": null,
+  // websiteIntegration.routes.ts
+  "integrations.create": { method: "POST", path: "/website-integrations", auth: true, access: "admin" },
+  "integrations.get": { method: "GET", path: "/website-integrations/:websiteId", auth: true, access: "admin" },
+  "integrations.update": { method: "PATCH", path: "/website-integrations/:websiteId", auth: true, access: "admin" },
+  "integrations.delete": { method: "DELETE", path: "/website-integrations/:websiteId", auth: true, access: "admin" },
+  "integrations.test": { method: "POST", path: "/website-integrations/:websiteId/test", auth: true, access: "admin" },
 
-  "editors.list": null,
-  "editors.get": null,
-  "editors.create": null,
-  "editors.update": null,
-  "editors.delete": null,
+  // integration.routes.ts (X-API-Key + X-API-Secret, no JWT)
+  "integration.blogs": { method: "GET", path: "/integration/blogs", auth: false, access: "api-key" },
+  "integration.blog": { method: "GET", path: "/integration/blogs/:blogId", auth: false, access: "api-key" },
+  "integration.media": { method: "GET", path: "/integration/media", auth: false, access: "api-key" },
+  "integration.mediaItem": { method: "GET", path: "/integration/media/:mediaId", auth: false, access: "api-key" },
+} as const satisfies Record<string, EndpointDef>;
 
-  "integrations.list": null,
-  "integrations.create": null,
-  "integrations.revoke": null,
-};
+export type EndpointKey = keyof typeof ENDPOINTS;
 
-/** Which route group each endpoint belongs to (for the Settings overview). */
-export const ENDPOINT_GROUPS: Record<string, { label: string; prefix: string; keys: EndpointKey[] }> = {
-  auth: { label: "Authentication", prefix: "/auth", keys: ["auth.login", "auth.me", "auth.changePassword"] },
-  websites: {
+export const ENDPOINT_GROUPS: { label: string; keys: EndpointKey[] }[] = [
+  { label: "Authentication", keys: ["auth.register", "auth.login", "auth.me"] },
+  { label: "Admin", keys: ["admin.editors"] },
+  {
     label: "Websites",
-    prefix: "/websites",
-    keys: ["websites.list", "websites.get", "websites.create", "websites.update", "websites.delete"],
+    keys: [
+      "websites.list",
+      "websites.get",
+      "websites.create",
+      "websites.update",
+      "websites.delete",
+      "websites.assignEditor",
+      "websites.transferOwnership",
+    ],
   },
-  blogs: { label: "Blogs", prefix: "/blogs", keys: ["blogs.list", "blogs.get", "blogs.create", "blogs.update", "blogs.delete"] },
-  media: { label: "Media", prefix: "/media", keys: ["media.list", "media.get", "media.upload", "media.update", "media.delete"] },
-  editors: {
-    label: "Editors",
-    prefix: "/admin",
-    keys: ["editors.list", "editors.get", "editors.create", "editors.update", "editors.delete"],
-  },
-  integrations: {
+  { label: "Blogs", keys: ["blogs.list", "blogs.get", "blogs.create", "blogs.update", "blogs.delete"] },
+  { label: "Media", keys: ["media.list", "media.get", "media.upload", "media.update", "media.delete"] },
+  {
     label: "Website integrations",
-    prefix: "/website-integrations",
-    keys: ["integrations.list", "integrations.create", "integrations.revoke"],
+    keys: ["integrations.create", "integrations.get", "integrations.update", "integrations.delete", "integrations.test"],
   },
-  integration: { label: "External integration", prefix: "/integration", keys: ["integration.blogs"] },
-};
+  {
+    label: "External integration API",
+    keys: ["integration.blogs", "integration.blog", "integration.media", "integration.mediaItem"],
+  },
+];
 
-/**
- * Multipart field name the media upload route expects (multer `upload.single(...)`).
- * NEEDS BACKEND ROUTE CONFIRMATION.
- */
-export const MEDIA_UPLOAD_FIELD = "file";
-
-export function isEndpointConfigured(key: EndpointKey): boolean {
-  return ENDPOINTS[key] !== null;
-}
+/** Multipart field name expected by `upload.single("image")` in media.routes.ts. */
+export const MEDIA_UPLOAD_FIELD = "image";
 
 export function resolvePath(path: string, params?: Record<string, string | number>): string {
   if (!params) return path;

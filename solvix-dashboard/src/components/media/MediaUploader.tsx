@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { useUploadMediaMutation } from "@/store/api/mediaApi";
-import { ACCEPTED_MEDIA, MAX_UPLOAD_BYTES } from "@/features/media/utils";
-import { getErrorMessage, isUnconfirmed } from "@/lib/api/errors";
+import { ACCEPTED_MEDIA, MAX_UPLOAD_BYTES, validateUploadFile } from "@/features/media/utils";
+import { getErrorMessage } from "@/lib/api/errors";
 import { formatBytes } from "@/utils/format";
 import { uid } from "@/utils/slug";
 
@@ -21,15 +21,21 @@ interface QueueItem {
   error?: string;
 }
 
-/** Drag-and-drop multi-file uploader. Files go to the backend media route, which stores them in Cloudinary. */
+/**
+ * Drag-and-drop multi-file uploader. Each file is sent to POST /media as
+ * multipart/form-data (image, websiteId, blogId?, altText?); the backend
+ * stores it in Cloudinary. One request per file, sequentially.
+ */
 export function MediaUploader({
   websiteId,
   blogId,
+  altText,
   onComplete,
   disabled,
 }: {
-  websiteId?: string;
+  websiteId: string;
   blogId?: string;
+  altText?: string;
   onComplete?: (uploaded: number) => void;
   disabled?: boolean;
 }) {
@@ -47,14 +53,15 @@ export function MediaUploader({
   const addFiles = useCallback((files: FileList | File[]) => {
     const next: QueueItem[] = [];
     for (const file of Array.from(files)) {
-      if (file.size > MAX_UPLOAD_BYTES) {
-        toast.error(`${file.name} is larger than ${formatBytes(MAX_UPLOAD_BYTES)}`);
+      const problem = validateUploadFile(file);
+      if (problem) {
+        toast.error(`${file.name}: ${problem}`);
         continue;
       }
       next.push({
         id: uid("up"),
         file,
-        preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+        preview: URL.createObjectURL(file),
         status: "queued",
       });
     }
@@ -80,25 +87,26 @@ export function MediaUploader({
   const start = async () => {
     const pending = items.filter((i) => i.status === "queued" || i.status === "error");
     if (!pending.length) return;
+    if (!websiteId) {
+      toast.error("Choose a website before uploading.");
+      return;
+    }
     setRunning(true);
     let ok = 0;
+    let failed = 0;
     for (const item of pending) {
       setStatus(item.id, "uploading");
       try {
-        await upload({ file: item.file, websiteId: websiteId || undefined, blogId: blogId || undefined }).unwrap();
+        await upload({ file: item.file, websiteId, blogId: blogId || undefined, altText: altText?.trim() || undefined }).unwrap();
         setStatus(item.id, "done");
         ok++;
       } catch (e) {
+        failed++;
         setStatus(item.id, "error", getErrorMessage(e, "Upload failed"));
-        if (isUnconfirmed(e)) {
-          toast.warning("Backend route not connected yet", { description: `"media.upload" needs route confirmation in src/lib/api/endpoints.ts.` });
-          // No point trying the rest
-          setItems((prev) => prev.map((i) => (i.status === "queued" ? { ...i, status: "error", error: "Upload route pending" } : i)));
-          break;
-        }
       }
     }
     setRunning(false);
+    if (failed > 0) toast.error(failed === 1 ? "1 upload failed" : `${failed} uploads failed`, { description: "See the error next to each file." });
     if (ok > 0) {
       toast.success(ok === 1 ? "Media uploaded successfully" : `${ok} files uploaded successfully`);
       onComplete?.(ok);
@@ -134,7 +142,7 @@ export function MediaUploader({
         <p className="mt-4 text-sm font-medium text-fg">
           <span className="text-brand">Click to upload</span> or drag and drop
         </p>
-        <p className="mt-1 text-xs text-muted">Images, video or PDF · up to {formatBytes(MAX_UPLOAD_BYTES)} each</p>
+        <p className="mt-1 text-xs text-muted">JPG, PNG or WebP · up to {formatBytes(MAX_UPLOAD_BYTES)} each</p>
         <input
           ref={inputRef}
           type="file"
@@ -194,7 +202,7 @@ export function MediaUploader({
             ))}
           </ul>
           <div className="flex justify-end gap-2 border-t border-border bg-surface-2/50 px-4 py-3">
-            <Button onClick={start} loading={running} disabled={!queued || disabled} leftIcon={<CloudUpload />}>
+            <Button onClick={start} loading={running} disabled={!queued || disabled || !websiteId} leftIcon={<CloudUpload />}>
               {running ? "Uploading…" : queued ? `Upload ${queued} file${queued === 1 ? "" : "s"}` : "All uploaded"}
             </Button>
           </div>

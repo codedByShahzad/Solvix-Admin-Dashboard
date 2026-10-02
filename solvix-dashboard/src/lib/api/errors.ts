@@ -1,23 +1,17 @@
 import type { EndpointKey } from "./endpoints";
 
-export type ApiErrorStatus =
-  | number
-  | "FETCH_ERROR"
-  | "PARSING_ERROR"
-  | "TIMEOUT_ERROR"
-  | "UNCONFIRMED"
-  | "CUSTOM_ERROR";
+export type ApiErrorStatus = number | "FETCH_ERROR" | "PARSING_ERROR" | "TIMEOUT_ERROR" | "CUSTOM_ERROR";
 
 export interface ApiError {
   status: ApiErrorStatus;
-  /** User-safe message. Raw backend errors are never shown directly. */
+  /** Message safe to show the user. */
   message: string;
   endpoint?: EndpointKey;
-  /** Field-level validation messages, keyed by field name, when the backend supplies them. */
-  fieldErrors?: Record<string, string>;
+  /** Extra validation messages (blog create/update returns `errors: string[]`). */
+  details?: string[];
 }
 
-const FRIENDLY: Record<string, string> = {
+const FALLBACK: Record<string, string> = {
   400: "The request couldn't be processed. Please check the form and try again.",
   401: "Your session has expired. Please sign in again.",
   403: "You don't have permission to perform this action.",
@@ -27,83 +21,50 @@ const FRIENDLY: Record<string, string> = {
   422: "Some fields are invalid. Please review and try again.",
   429: "Too many requests. Please wait a moment and try again.",
   500: "Something went wrong on the server. Please try again shortly.",
-  FETCH_ERROR: "Can't reach the Solvix server. Check your connection or that the backend is running.",
+  FETCH_ERROR: "Can't reach the Solvix server. Check that the backend is running and NEXT_PUBLIC_API_URL is correct.",
   TIMEOUT_ERROR: "The server took too long to respond. Please try again.",
   PARSING_ERROR: "The server sent an unexpected response.",
-  UNCONFIRMED: "This feature is waiting for its backend route to be connected.",
   CUSTOM_ERROR: "Something went wrong. Please try again.",
 };
 
-function pickString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0 && value.length <= 200 ? value.trim() : undefined;
-}
-
-/** Pull field errors out of common Express / Mongoose / zod error payloads. */
-function extractFieldErrors(data: unknown): Record<string, string> | undefined {
-  if (!data || typeof data !== "object") return undefined;
-  const d = data as Record<string, unknown>;
-  const source = d.errors ?? d.errorSources ?? (d.error as Record<string, unknown> | undefined)?.errors;
-  const out: Record<string, string> = {};
-
-  if (Array.isArray(source)) {
-    for (const e of source) {
-      if (!e || typeof e !== "object") continue;
-      const item = e as Record<string, unknown>;
-      const field = pickString(item.path) ?? pickString(item.field) ?? pickString(item.param);
-      const msg = pickString(item.message) ?? pickString(item.msg);
-      if (field && msg) out[field] = msg;
-    }
-  } else if (source && typeof source === "object") {
-    for (const [field, v] of Object.entries(source as Record<string, unknown>)) {
-      const msg = pickString(v) ?? pickString((v as Record<string, unknown> | null)?.message);
-      if (msg) out[field] = msg;
-    }
-  }
-  return Object.keys(out).length ? out : undefined;
-}
-
-function backendMessage(data: unknown): string | undefined {
-  if (!data || typeof data !== "object") return undefined;
-  const d = data as Record<string, unknown>;
-  return pickString(d.message) ?? pickString((d.error as Record<string, unknown> | undefined)?.message) ?? pickString(d.error);
-}
-
 /**
- * Convert any RTK / fetch error into an ApiError with a user-safe message.
- * Backend messages are only surfaced for validation/conflict responses (400/409/422),
- * where they are written for end users (e.g. "Email already exists").
+ * Every Solvix backend error is JSON shaped like
+ *   { success?: false, message: string, errors?: string[] }
+ * and the messages are written for end users, so we show them directly.
  */
+function readBackendError(data: unknown): { message?: string; details?: string[] } {
+  if (!data || typeof data !== "object") return {};
+  const d = data as { message?: unknown; errors?: unknown };
+  const message = typeof d.message === "string" && d.message.trim() ? d.message.trim() : undefined;
+  const details = Array.isArray(d.errors) ? d.errors.filter((e): e is string => typeof e === "string") : undefined;
+  return { message, details };
+}
+
 export function toApiError(raw: { status: ApiErrorStatus; data?: unknown }, endpoint?: EndpointKey): ApiError {
-  const status = raw.status;
-  const key = String(status);
-  let message = FRIENDLY[key] ?? (typeof status === "number" && status >= 500 ? FRIENDLY[500] : FRIENDLY.CUSTOM_ERROR);
+  const { message, details } = readBackendError(raw.data);
+  const key = String(raw.status);
+  const fallback =
+    FALLBACK[key] ?? (typeof raw.status === "number" && raw.status >= 500 ? FALLBACK[500] : FALLBACK.CUSTOM_ERROR);
 
-  if (status === 400 || status === 409 || status === 422) {
-    message = backendMessage(raw.data) ?? message;
-  }
-  if (status === 401 && endpoint === "auth.login") {
-    message = "Invalid email or password.";
-  }
+  // An expired/invalid dashboard token gets the friendly wording.
+  const isSessionError =
+    raw.status === 401 && endpoint !== "auth.login" && !endpoint?.startsWith("integration.");
 
-  return { status, message, endpoint, fieldErrors: extractFieldErrors(raw.data) };
+  return {
+    status: raw.status,
+    message: isSessionError ? FALLBACK[401] : (message ?? fallback),
+    endpoint,
+    details,
+  };
 }
 
 export function isApiError(e: unknown): e is ApiError {
   return !!e && typeof e === "object" && "status" in e && "message" in e;
 }
 
-export function getErrorMessage(e: unknown, fallback = FRIENDLY.CUSTOM_ERROR): string {
+export function getErrorMessage(e: unknown, fallback = FALLBACK.CUSTOM_ERROR): string {
   return isApiError(e) ? e.message : fallback;
 }
 
-export function isUnconfirmed(e: unknown): e is ApiError {
-  return isApiError(e) && e.status === "UNCONFIRMED";
-}
-
-export function isForbidden(e: unknown): boolean {
-  return isApiError(e) && e.status === 403;
-}
-
-export function isNotFound(e: unknown): boolean {
-  return isApiError(e) && e.status === 404;
-}
+export const isForbidden = (e: unknown) => isApiError(e) && e.status === 403;
+export const isNotFound = (e: unknown) => isApiError(e) && e.status === 404;

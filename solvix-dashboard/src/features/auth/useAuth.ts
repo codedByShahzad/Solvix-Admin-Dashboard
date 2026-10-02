@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { baseApi } from "@/store/api/baseApi";
 import { sessionEnded, sessionStarted } from "./authSlice";
-import { clearSession, saveSession, type SessionMode } from "./session";
+import { clearSession, saveSession } from "./session";
 import type { Role, User } from "@/types";
 
 export function useAuth() {
@@ -14,14 +14,15 @@ export function useAuth() {
   const router = useRouter();
 
   const signIn = useCallback(
-    (token: string, user: User, mode: SessionMode = "live") => {
+    (token: string, user: User) => {
       dispatch(baseApi.util.resetApiState());
-      saveSession({ token, user, mode });
-      dispatch(sessionStarted({ token, user, mode }));
+      saveSession({ token, user });
+      dispatch(sessionStarted({ token, user }));
     },
     [dispatch],
   );
 
+  /** The backend is stateless (no logout route) — clear the token locally. */
   const signOut = useCallback(
     (reason: "logout" | "expired" = "logout") => {
       clearSession();
@@ -32,13 +33,7 @@ export function useAuth() {
     [dispatch, router],
   );
 
-  return {
-    ...auth,
-    isAuthenticated: auth.status === "authenticated",
-    isDemo: auth.mode === "demo",
-    signIn,
-    signOut,
-  };
+  return { ...auth, isAuthenticated: auth.status === "authenticated", signIn, signOut };
 }
 
 export function useCurrentUser(): User | null {

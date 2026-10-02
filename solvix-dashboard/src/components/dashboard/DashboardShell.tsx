@@ -2,7 +2,7 @@
 
 import { useEffect, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { FlaskConical, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { STORAGE_KEYS } from "@/lib/config";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -11,22 +11,6 @@ import { useAuth } from "@/features/auth/useAuth";
 import { Sidebar } from "./Sidebar";
 import { Navbar } from "./Navbar";
 import { LogoMark } from "./Logo";
-
-function DemoBanner() {
-  const { signOut } = useAuth();
-  return (
-    <div className="flex items-center justify-center gap-2 border-b border-warning/20 bg-warning-soft px-4 py-1.5 text-center text-xs text-fg">
-      <FlaskConical className="size-3.5 shrink-0 text-warning" />
-      <span>
-        <span className="font-semibold">Demo preview</span>
-        <span className="hidden text-muted sm:inline"> — sample data only, nothing is sent to your backend.</span>
-      </span>
-      <button type="button" onClick={() => signOut()} className="ml-1 font-medium text-brand underline-offset-2 hover:underline">
-        Exit demo
-      </button>
-    </div>
-  );
-}
 
 function FullScreenLoader() {
   return (
@@ -44,7 +28,7 @@ function FullScreenLoader() {
 export function DashboardShell({ children }: { children: ReactNode }) {
   const dispatch = useAppDispatch();
   const pathname = usePathname();
-  const { status, isDemo } = useAuth();
+  const { status } = useAuth();
   const { sidebarCollapsed, mobileNavOpen } = useAppSelector((s) => s.ui);
 
   // Restore collapsed preference
@@ -109,7 +93,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       )}
 
       <div className={cn("flex min-h-screen flex-col transition-[padding] duration-200 ease-out", sidebarCollapsed ? "lg:pl-[76px]" : "lg:pl-64")}>
-        {isDemo && <DemoBanner />}
         <Navbar onOpenMobileNav={() => dispatch(setMobileNavOpen(true))} />
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
       </div>

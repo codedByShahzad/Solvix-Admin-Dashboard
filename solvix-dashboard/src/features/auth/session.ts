@@ -1,19 +1,18 @@
 /**
  * Session persistence.
- *  - localStorage keeps { token, user, mode } so a refresh restores the user.
- *  - JS-readable cookies (token + role) let src/middleware.ts protect routes
- *    before any page renders. The backend still verifies every request.
+ *  - localStorage keeps { token, user } so a refresh restores the session
+ *    (it is then re-validated against GET /auth/me).
+ *  - JS-readable cookies (token + role) let src/middleware.ts guard routes
+ *    before a page renders. The backend still verifies every request.
+ * The backend has no logout endpoint (stateless JWT), so logout = clear these.
  */
 import { COOKIE_KEYS, STORAGE_KEYS } from "@/lib/config";
 import { getJwtExpiry } from "@/utils/jwt";
 import type { User } from "@/types";
 
-export type SessionMode = "live" | "demo";
-
 export interface StoredSession {
   token: string;
   user: User;
-  mode: SessionMode;
 }
 
 function setCookie(name: string, value: string, expires?: Date) {

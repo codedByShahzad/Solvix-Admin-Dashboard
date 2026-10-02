@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
-import { StatusBadge } from "@/components/ui";
+import { WebsiteStatusBadge } from "./WebsiteStatusBadge";
 import { formatDate, hostOf, siteUrl } from "@/utils/format";
 import type { Website } from "@/types";
 import { WebsiteAvatar } from "./WebsiteAvatar";
@@ -13,7 +13,7 @@ export function WebsiteCard({ website, blogCount }: { website: Website; blogCoun
     >
       <div className="flex items-start justify-between gap-3">
         <WebsiteAvatar website={website} size="lg" />
-        <StatusBadge status={website.status} />
+        <WebsiteStatusBadge active={website.isActive} />
       </div>
       <div className="min-w-0">
         <h3 className="truncate font-semibold text-fg">{website.name}</h3>

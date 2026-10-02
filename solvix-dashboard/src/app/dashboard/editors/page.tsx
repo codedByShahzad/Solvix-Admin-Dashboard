@@ -3,17 +3,13 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, MoreHorizontal, Pencil, Trash2, UserPlus, Users } from "lucide-react";
+import { Eye, UserPlus, Users } from "lucide-react";
 import {
   Avatar,
   Badge,
-  Button,
   ButtonLink,
   DataTable,
   EmptyState,
-  Menu,
-  MenuItem,
-  MenuSeparator,
   NoResults,
   PageHeader,
   QueryState,
@@ -24,10 +20,10 @@ import {
   TableSkeleton,
   type Column,
 } from "@/components/ui";
-import { useDeleteEditor } from "@/components/editors/useDeleteEditor";
 import { useGetEditorsQuery } from "@/store/api/editorApi";
+import { useEditorWebsites } from "@/features/editors/useEditorWebsites";
 import { useDebounce } from "@/hooks/useDebounce";
-import { formatDate, formatRelative } from "@/utils/format";
+import { formatDate } from "@/utils/format";
 import type { Editor } from "@/types";
 
 type StatusFilter = "all" | "active" | "inactive";
@@ -35,28 +31,21 @@ type StatusFilter = "all" | "active" | "inactive";
 export default function EditorsPage() {
   const router = useRouter();
   const q = useGetEditorsQuery();
+  const { websites, forEditor } = useEditorWebsites();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [website, setWebsite] = useState("");
   const debounced = useDebounce(search);
-  const { requestDelete, dialog } = useDeleteEditor();
-
-  const items = useMemo(() => q.data?.items ?? [], [q.data]);
-  const websiteOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const e of items) for (const w of e.websites) map.set(w.id, w.name ?? w.id);
-    return [...map].map(([value, label]) => ({ value, label }));
-  }, [items]);
 
   const filtered = useMemo(() => {
     const term = debounced.trim().toLowerCase();
-    return items.filter(
+    return (q.data ?? []).filter(
       (e) =>
         (status === "all" || (status === "active" ? e.isActive : !e.isActive)) &&
-        (!website || e.websites.some((w) => w.id === website)) &&
+        (!website || forEditor(e.id).some((w) => w.id === website)) &&
         (!term || e.name.toLowerCase().includes(term) || e.email.toLowerCase().includes(term)),
     );
-  }, [items, debounced, status, website]);
+  }, [q.data, debounced, status, website, forEditor]);
 
   const clear = () => {
     setSearch("");
@@ -64,43 +53,21 @@ export default function EditorsPage() {
     setWebsite("");
   };
 
-  const actions = (e: Editor) => (
-    <RowActions>
-      <Menu
-        width="w-44"
-        trigger={({ toggle }) => (
-          <Button variant="ghost" size="icon-sm" onClick={toggle} aria-label={`Actions for ${e.name}`}>
-            <MoreHorizontal />
-          </Button>
-        )}
-      >
-        <MenuItem href={`/dashboard/editors/${e.id}`} icon={<Eye />}>
-          View
-        </MenuItem>
-        <MenuItem href={`/dashboard/editors/${e.id}/edit`} icon={<Pencil />}>
-          Edit
-        </MenuItem>
-        <MenuSeparator />
-        <MenuItem onClick={() => requestDelete(e)} icon={<Trash2 />} danger>
-          Remove
-        </MenuItem>
-      </Menu>
-    </RowActions>
-  );
-
-  const websitesCell = (e: Editor) =>
-    e.websites.length ? (
+  const websitesCell = (e: Editor) => {
+    const list = forEditor(e.id);
+    return list.length ? (
       <div className="flex flex-wrap gap-1">
-        {e.websites.slice(0, 2).map((w) => (
+        {list.slice(0, 2).map((w) => (
           <Badge key={w.id} tone="brand">
-            {w.name ?? w.id}
+            {w.name}
           </Badge>
         ))}
-        {e.websites.length > 2 && <Badge>+{e.websites.length - 2}</Badge>}
+        {list.length > 2 && <Badge>+{list.length - 2}</Badge>}
       </div>
     ) : (
       <span className="text-xs text-subtle">None</span>
     );
+  };
 
   const columns: Column<Editor>[] = [
     {
@@ -119,7 +86,7 @@ export default function EditorsPage() {
         </div>
       ),
     },
-    { key: "websites", header: "Websites", cell: websitesCell },
+    { key: "websites", header: "Your websites", cell: websitesCell },
     {
       key: "status",
       header: "Status",
@@ -131,25 +98,30 @@ export default function EditorsPage() {
       ),
     },
     {
-      key: "lastLogin",
-      header: "Last active",
-      sortValue: (e) => (e.lastLoginAt ? new Date(e.lastLoginAt) : undefined),
-      cell: (e) => <span className="whitespace-nowrap text-muted">{formatRelative(e.lastLoginAt, "Never")}</span>,
-    },
-    {
       key: "created",
       header: "Added",
       sortValue: (e) => (e.createdAt ? new Date(e.createdAt) : undefined),
       cell: (e) => <span className="whitespace-nowrap text-muted">{formatDate(e.createdAt)}</span>,
     },
-    { key: "actions", header: <span className="sr-only">Actions</span>, align: "right", cell: actions },
+    {
+      key: "actions",
+      header: <span className="sr-only">Actions</span>,
+      align: "right",
+      cell: (e) => (
+        <RowActions>
+          <ButtonLink href={`/dashboard/editors/${e.id}`} variant="ghost" size="sm" leftIcon={<Eye className="size-4" />}>
+            View
+          </ButtonLink>
+        </RowActions>
+      ),
+    },
   ];
 
   return (
     <>
       <PageHeader
         title="Editors"
-        description="People who write and manage content for assigned websites."
+        description="Editor accounts and the websites they can manage."
         actions={
           <ButtonLink href="/dashboard/editors/create" leftIcon={<UserPlus className="size-4" />}>
             Add editor
@@ -159,13 +131,13 @@ export default function EditorsPage() {
       <QueryState
         query={q}
         loading={<TableSkeleton />}
-        isEmpty={(d) => d.items.length === 0}
+        isEmpty={(d) => d.length === 0}
         empty={
           <div className="card">
             <EmptyState
               icon={<Users />}
               title="No editors yet"
-              description="Invite editors and give them access to specific websites."
+              description="Create editor accounts and give them access to specific websites."
               action={
                 <ButtonLink href="/dashboard/editors/create" leftIcon={<UserPlus className="size-4" />}>
                   Add editor
@@ -187,8 +159,15 @@ export default function EditorsPage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <SearchInput value={search} onChange={setSearch} placeholder="Search name or email…" />
                 <div className="flex flex-wrap items-center gap-2">
-                  {websiteOptions.length > 1 && (
-                    <Select value={website} onChange={(e) => setWebsite(e.target.value)} options={websiteOptions} placeholder="All websites" className="h-8 w-40 text-[13px]" aria-label="Filter by website" />
+                  {websites.length > 1 && (
+                    <Select
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
+                      options={websites.map((w) => ({ value: w.id, label: w.name }))}
+                      placeholder="All websites"
+                      className="h-8 w-40 text-[13px]"
+                      aria-label="Filter by website"
+                    />
                   )}
                   <Segmented<StatusFilter>
                     value={status}
@@ -210,13 +189,11 @@ export default function EditorsPage() {
                   <div className="truncate text-xs text-muted">{e.email}</div>
                   <div className="mt-1.5">{websitesCell(e)}</div>
                 </div>
-                {actions(e)}
               </div>
             )}
           />
         )}
       </QueryState>
-      {dialog}
     </>
   );
 }

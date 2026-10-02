@@ -4,12 +4,14 @@ import Link from "next/link";
 import { Copy, Eye, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Menu, MenuItem, MenuSeparator } from "@/components/ui";
+import { useIsAdmin } from "@/features/auth/useAuth";
 import { formatBytes } from "@/utils/format";
 import { mediaFormat } from "@/features/media/utils";
 import type { Media } from "@/types";
 import { MediaPreview } from "./MediaPreview";
 
 export function MediaCard({ media, onDelete }: { media: Media; onDelete: (m: Media) => void }) {
+  const isAdmin = useIsAdmin();
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(media.url);
@@ -23,9 +25,7 @@ export function MediaCard({ media, onDelete }: { media: Media; onDelete: (m: Med
     <div className="card group relative flex flex-col overflow-hidden transition-all hover:border-border-strong hover:shadow-pop">
       <Link href={`/dashboard/media/${media.id}`} className="relative block aspect-[4/3] overflow-hidden bg-surface-2">
         <MediaPreview media={media} className="transition-transform duration-300 group-hover:scale-[1.03]" />
-        <span className="absolute left-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur">
-          {mediaFormat(media)}
-        </span>
+        <span className="absolute left-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-2xs font-semibold text-white backdrop-blur">{mediaFormat(media)}</span>
       </Link>
       <div className="flex items-start gap-2 p-3">
         <div className="min-w-0 flex-1">
@@ -54,10 +54,14 @@ export function MediaCard({ media, onDelete }: { media: Media; onDelete: (m: Med
           <MenuItem onClick={copy} icon={<Copy />}>
             Copy URL
           </MenuItem>
-          <MenuSeparator />
-          <MenuItem onClick={() => onDelete(media)} icon={<Trash2 />} danger>
-            Delete
-          </MenuItem>
+          {isAdmin && (
+            <>
+              <MenuSeparator />
+              <MenuItem onClick={() => onDelete(media)} icon={<Trash2 />} danger>
+                Delete
+              </MenuItem>
+            </>
+          )}
         </Menu>
       </div>
     </div>

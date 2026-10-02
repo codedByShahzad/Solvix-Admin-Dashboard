@@ -36,12 +36,14 @@ const checkWebsiteAccess = (
     return true;
   }
 
-  // Editor can access websites they own
-  if (
-    role === "editor" &&
-    website?.owner?.toString() === userId
-  ) {
-    return true;
+  // Editor can access websites they are assigned to (website.editors),
+  // the same rule used by websiteAccess.middleware and GET /websites.
+  if (role === "editor") {
+    const isAssigned = (website?.editors ?? []).some(
+      (editorId: any) => editorId?.toString() === userId
+    );
+
+    return isAssigned;
   }
 
   return false;
@@ -242,7 +244,7 @@ export const getAllMedia = async (
       websites = await WebsiteModel.find().select("_id");
     } else {
       websites = await WebsiteModel.find({
-        owner: userId,
+        editors: userId,
       }).select("_id");
     }
 
@@ -300,7 +302,6 @@ export const getSingleMedia = async (
 ) => {
   try {
     const userId = req.user?.userId;
-    const role = req.user?.role;
 
     const id = req.params.id;
 
@@ -340,7 +341,7 @@ export const getSingleMedia = async (
     const media = await MediaModel.findById(id)
       .populate(
         "website",
-        "name slug domain owner"
+        "name slug domain owner editors"
       )
       .populate(
         "blog",
@@ -367,9 +368,7 @@ export const getSingleMedia = async (
       });
     }
 
-    const hasAccess =
-      role === "admin" ||
-      website.owner?.toString() === userId;
+    const hasAccess = checkWebsiteAccess(website, req);
 
     if (!hasAccess) {
       return res.status(403).json({
@@ -406,7 +405,6 @@ export const updateMedia = async (
 ) => {
   try {
     const userId = req.user?.userId;
-    const role = req.user?.role;
 
     const id = req.params.id;
 
@@ -471,9 +469,7 @@ export const updateMedia = async (
     // Website authorization
     // --------------------------------------------------------
 
-    const hasAccess =
-      role === "admin" ||
-      website.owner?.toString() === userId;
+    const hasAccess = checkWebsiteAccess(website, req);
 
     if (!hasAccess) {
       return res.status(403).json({
@@ -645,7 +641,6 @@ export const deleteMedia = async (
     // ========================================
 
     const userId = req.user?.userId;
-    const role = req.user?.role;
     const { id } = req.params;
 
     // ========================================
@@ -709,9 +704,7 @@ export const deleteMedia = async (
     // Authorization
     // ========================================
 
-    const hasAccess =
-      role === "admin" ||
-      website.owner?.toString() === userId;
+    const hasAccess = checkWebsiteAccess(website, req);
 
     if (!hasAccess) {
       return res.status(403).json({

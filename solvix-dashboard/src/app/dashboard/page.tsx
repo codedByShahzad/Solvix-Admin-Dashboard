@@ -57,7 +57,6 @@ export default function DashboardHomePage() {
   const isAdmin = user?.role === "admin";
   const d = useDashboardData(user?.role);
   const blogState = statState(d.blogs);
-  const partialHint = d.partial ? `From the latest ${d.blogs.data?.items.length}` : undefined;
   const today = new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" }).format(new Date());
 
   const n = (v?: number) => (v === undefined ? undefined : formatNumber(v));
@@ -93,19 +92,20 @@ export default function DashboardHomePage() {
       {/* Stats */}
       {isAdmin ? (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 2xl:grid-cols-6">
-          <StatCard label="Total Websites" icon={<Globe />} state={statState(d.websites)} value={n(d.websites.data?.total)} href="/dashboard/websites" />
-          <StatCard label="Total Blogs" icon={<FileText />} accent="info" state={blogState} value={n(d.blogs.data?.total)} href="/dashboard/blogs" />
-          <StatCard label="Published Blogs" icon={<FileCheck2 />} accent="success" state={blogState} value={n(d.published)} hint={partialHint} href="/dashboard/blogs" />
-          <StatCard label="Draft Blogs" icon={<FilePen />} accent="warning" state={blogState} value={n(d.drafts)} hint={partialHint} href="/dashboard/blogs" />
-          <StatCard label="Total Media" icon={<ImageIcon />} accent="info" state={statState(d.media)} value={n(d.media.data?.total)} href="/dashboard/media" />
-          <StatCard label="Total Editors" icon={<Users />} accent="neutral" state={statState(d.editors)} value={n(d.editors.data?.total)} href="/dashboard/editors" />
+          <StatCard label="Total Websites" icon={<Globe />} state={statState(d.websites)} value={n(d.websites.data?.length)} href="/dashboard/websites" />
+          <StatCard label="Total Blogs" icon={<FileText />} accent="info" state={blogState} value={n(d.blogs.data?.length)} href="/dashboard/blogs" />
+          <StatCard label="Published Blogs" icon={<FileCheck2 />} accent="success" state={blogState} value={n(d.published)} href="/dashboard/blogs" />
+          <StatCard label="Draft Blogs" icon={<FilePen />} accent="warning" state={blogState} value={n(d.drafts)} href="/dashboard/blogs" />
+          <StatCard label="Total Media" icon={<ImageIcon />} accent="info" state={statState(d.media)} value={n(d.media.data?.length)} href="/dashboard/media" />
+          <StatCard label="Total Editors" icon={<Users />} accent="neutral" state={statState(d.editors)} value={n(d.editors.data?.length)} href="/dashboard/editors" />
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="Accessible Blogs" icon={<FileText />} state={blogState} value={n(d.blogs.data?.total)} href="/dashboard/blogs" />
-          <StatCard label="Published Blogs" icon={<FileCheck2 />} accent="success" state={blogState} value={n(d.published)} hint={partialHint} href="/dashboard/blogs" />
-          <StatCard label="Draft Blogs" icon={<FilePen />} accent="warning" state={blogState} value={n(d.drafts)} hint={partialHint} href="/dashboard/blogs" />
-          <StatCard label="Media" icon={<ImageIcon />} accent="info" state={statState(d.media)} value={n(d.media.data?.total)} href="/dashboard/media" />
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+          <StatCard label="Your Websites" icon={<Globe />} state={statState(d.websites)} value={n(d.websites.data?.length)} />
+          <StatCard label="Accessible Blogs" icon={<FileText />} state={blogState} value={n(d.blogs.data?.length)} href="/dashboard/blogs" />
+          <StatCard label="Published Blogs" icon={<FileCheck2 />} accent="success" state={blogState} value={n(d.published)} href="/dashboard/blogs" />
+          <StatCard label="Draft Blogs" icon={<FilePen />} accent="warning" state={blogState} value={n(d.drafts)} href="/dashboard/blogs" />
+          <StatCard label="Media" icon={<ImageIcon />} accent="info" state={statState(d.media)} value={n(d.media.data?.length)} href="/dashboard/media" />
         </div>
       )}
 
@@ -154,18 +154,20 @@ export default function DashboardHomePage() {
                 <Skeleton className="h-16 w-full" />
               ) : d.blogs.isError ? (
                 <ErrorState error={d.blogs.error} compact />
-              ) : (d.published + d.drafts === 0 ? (
+              ) : (d.published + d.drafts + d.archived === 0 ? (
                 <p className="text-sm text-muted">No blogs to summarise yet.</p>
               ) : (
                 <>
                   <div className="flex h-2.5 overflow-hidden rounded-full bg-surface-2">
-                    <div className="bg-success transition-all" style={{ width: `${(d.published / (d.published + d.drafts)) * 100}%` }} />
-                    <div className="bg-warning transition-all" style={{ width: `${(d.drafts / (d.published + d.drafts)) * 100}%` }} />
+                    <div className="bg-success transition-all" style={{ width: `${(d.published / (d.published + d.drafts + d.archived)) * 100}%` }} />
+                    <div className="bg-warning transition-all" style={{ width: `${(d.drafts / (d.published + d.drafts + d.archived)) * 100}%` }} />
+                    <div className="bg-subtle transition-all" style={{ width: `${(d.archived / (d.published + d.drafts + d.archived)) * 100}%` }} />
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="mt-4 grid grid-cols-3 gap-2">
                     {[
                       { label: "Published", value: d.published, dot: "bg-success" },
                       { label: "Drafts", value: d.drafts, dot: "bg-warning" },
+                      { label: "Archived", value: d.archived, dot: "bg-subtle" },
                     ].map((s) => (
                       <div key={s.label} className="rounded-lg bg-surface-2/60 p-3">
                         <div className="flex items-center gap-1.5 text-xs text-muted">
@@ -175,7 +177,7 @@ export default function DashboardHomePage() {
                         <div className="mt-1 text-lg font-semibold tabular-nums text-fg">
                           {s.value}
                           <span className="ml-1 text-xs font-normal text-muted">
-                            {Math.round((s.value / (d.published + d.drafts)) * 100)}%
+                            {Math.round((s.value / (d.published + d.drafts + d.archived)) * 100)}%
                           </span>
                         </div>
                       </div>
@@ -202,11 +204,11 @@ export default function DashboardHomePage() {
                   <ListSkeleton rows={2} />
                 ) : d.websites.isError ? (
                   <ErrorState error={d.websites.error} onRetry={() => d.websites.refetch()} compact />
-                ) : !d.websites.data?.items.length ? (
+                ) : !d.websites.data?.length ? (
                   <EmptyState compact icon={<Globe />} title="No websites yet" />
                 ) : (
                   <ul>
-                    {d.websites.data.items.map((w) => {
+                    {d.websites.data.map((w) => {
                       const c = d.perWebsite.get(w.id);
                       return (
                         <li key={w.id}>
@@ -218,7 +220,7 @@ export default function DashboardHomePage() {
                             </div>
                             {d.blogs.data && (
                               <div className="text-right text-xs">
-                                <div className="font-semibold tabular-nums text-fg">{(c?.published ?? 0) + (c?.drafts ?? 0)} blogs</div>
+                                <div className="font-semibold tabular-nums text-fg">{c?.total ?? 0} blogs</div>
                                 <div className="text-muted">{c?.published ?? 0} live</div>
                               </div>
                             )}
@@ -232,22 +234,27 @@ export default function DashboardHomePage() {
             </Card>
           ) : (
             <Card>
-              <CardHeader icon={<Globe />} title="Your websites" />
+              <CardHeader icon={<Globe />} title="Your websites" description="Websites you're assigned to" />
               <div className="p-3">
-                {user?.websites?.length ? (
+                {d.websites.isLoading ? (
+                  <ListSkeleton rows={2} />
+                ) : d.websites.isError ? (
+                  <ErrorState error={d.websites.error} onRetry={() => d.websites.refetch()} compact />
+                ) : !d.websites.data?.length ? (
+                  <p className="px-2 py-3 text-sm text-muted">You aren&apos;t assigned to any website yet. Ask an admin to give you access.</p>
+                ) : (
                   <ul>
-                    {user.websites.map((w) => (
+                    {d.websites.data.map((w) => (
                       <li key={w.id} className="flex items-center gap-3 rounded-lg px-2 py-2.5">
-                        <WebsiteAvatar website={{ id: w.id, name: w.name ?? w.id }} />
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-fg">{w.name ?? w.id}</div>
-                          {w.domain && <div className="truncate text-xs text-muted">{w.domain}</div>}
+                        <WebsiteAvatar website={w} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-fg">{w.name}</div>
+                          <div className="truncate text-xs text-muted">{hostOf(w.domain)}</div>
                         </div>
+                        <span className="text-xs tabular-nums text-muted">{d.perWebsite.get(w.id)?.total ?? 0} blogs</span>
                       </li>
                     ))}
                   </ul>
-                ) : (
-                  <p className="px-2 py-3 text-sm text-muted">Website access is managed by your admin.</p>
                 )}
               </div>
             </Card>

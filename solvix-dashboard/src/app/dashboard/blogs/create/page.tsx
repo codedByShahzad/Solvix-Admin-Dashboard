@@ -13,7 +13,7 @@ function CreateBlog() {
   const router = useRouter();
   const params = useSearchParams();
   const { websites, isLoading: websitesLoading } = useWebsiteOptions();
-  const [create, { isLoading }] = useCreateBlogMutation();
+  const [create, { isLoading, isSuccess }] = useCreateBlogMutation();
   const run = useMutationToast();
 
   if (websitesLoading) return <LoadingState label="Preparing editor…" />;
@@ -22,16 +22,15 @@ function CreateBlog() {
 
   return (
     <BlogEditor
-      endpoint="blogs.create"
       cancelHref="/dashboard/blogs"
       defaults={{ website: defaultWebsite }}
-      submitting={isLoading}
+      submitting={isLoading || isSuccess}
       onSubmit={async (values) => {
         const created = await run(
           create(toBlogPayload(values)).unwrap(),
           values.status === "published" ? "Blog published successfully" : "Blog saved as draft",
         );
-        if (created) router.push(created.id ? `/dashboard/blogs/${created.id}` : "/dashboard/blogs");
+        if (created) router.push(`/dashboard/blogs/${created.id}`);
       }}
     />
   );

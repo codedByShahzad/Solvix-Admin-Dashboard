@@ -1,127 +1,132 @@
 /**
- * Frontend domain models. Backend documents are converted into these shapes
- * by src/lib/api/normalize.ts, so pages never depend on raw Mongo field names
- * (_id vs id, populated vs unpopulated refs, etc.).
+ * Frontend domain types — these mirror the Solvix backend models
+ * (server/src/models). Raw API documents are converted into these
+ * by src/lib/api/mappers.ts.
  */
 
 export type Role = "admin" | "editor";
 
+/** A populated reference (e.g. blog.website → { _id, name, domain }). */
 export interface Ref {
   id: string;
   name?: string;
   domain?: string;
 }
 
+// ── User (models/User.ts) ────────────────────────────────────────────────────
 export interface User {
   id: string;
   name: string;
   email: string;
   role: Role;
-  avatar?: string;
-  /** Websites the user may access (editors). Present only if the backend returns it. */
-  websites?: Ref[];
+  isActive: boolean;
+  createdAt?: string;
 }
 
-export type WebsiteStatus = "active" | "inactive" | (string & {});
+/** Editors returned by GET /admin/editors. */
+export type Editor = User;
 
+// ── Website (models/Website.ts) ──────────────────────────────────────────────
 export interface Website {
   id: string;
   name: string;
+  slug: string;
   domain: string;
-  slug?: string;
   description?: string;
-  status: WebsiteStatus;
-  logo?: string;
-  owner?: Ref | null;
+  isActive: boolean;
+  /** Owner user ID (not populated by the backend). */
+  owner: string;
+  /** Assigned editor user IDs (not populated by the backend). */
+  editors: string[];
   createdAt?: string;
   updatedAt?: string;
 }
 
-export type BlogStatus = "draft" | "published" | (string & {});
+// ── Blog (models/Blog.ts) ────────────────────────────────────────────────────
+export type BlogStatus = "draft" | "published" | "archived";
 
-export type ContentBlockType = "heading" | "paragraph" | "quote" | "image" | "list";
+export type BlockType = "paragraph" | "list";
 
-export interface ContentBlock {
-  id: string;
-  type: ContentBlockType;
+export interface Block {
+  type: BlockType;
   text?: string;
-  level?: 2 | 3;
-  src?: string;
-  alt?: string;
-  caption?: string;
   items?: string[];
+}
+
+export interface Section {
+  id: string;
+  title: string;
+  blocks: Block[];
 }
 
 export interface Blog {
   id: string;
   websiteId: string;
-  website?: Ref | null;
+  /** Populated on list / get (name, domain). */
+  website: Ref | null;
   slug: string;
   title: string;
   subtitle?: string;
   heroImage?: string;
   category?: string;
   publishDate?: string;
-  readingTime?: number;
+  /** Free text, e.g. "5 min read". */
+  readingTime?: string;
   canonicalPath?: string;
   seoTitle?: string;
   seoDescription?: string;
   keywords: string[];
   ogImage?: string;
+  sections: Section[];
   status: BlogStatus;
-  author?: Ref | null;
+  /** Populated on list / get (name, email). */
+  author?: {
+  id: string;
+  name: string;
+  email?: string;
+};
   relatedSlugs: string[];
-  content: ContentBlock[];
   createdAt?: string;
   updatedAt?: string;
 }
 
+// ── Media (models/Media.model.ts) ────────────────────────────────────────────
 export interface Media {
   id: string;
+  websiteId: string;
+  /** Populated (name, slug, domain). */
+  website: (Ref & { slug?: string }) | null;
+  blogId?: string;
+  /** Populated (title, slug). */
+  blog: { id: string; title?: string; slug?: string } | null;
+  filename: string;
   url: string;
   publicId?: string;
-  filename: string;
   mimeType?: string;
-  format?: string;
   size?: number;
   width?: number;
   height?: number;
-  alt?: string;
-  caption?: string;
-  websiteId?: string;
-  website?: Ref | null;
-  blogId?: string;
-  blog?: (Ref & { title?: string }) | null;
-  uploadedBy?: Ref | null;
+  altText?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
-export interface Editor {
-  id: string;
-  name: string;
-  email: string;
-  role: Role;
-  isActive: boolean;
-  websites: Ref[];
-  createdAt?: string;
-  lastLoginAt?: string;
-}
+// ── Website integration (models/websiteIntegration.model.ts) ────────────────
+export type IntegrationStatus = "connected" | "disconnected" | "error";
 
 export interface WebsiteIntegration {
   id: string;
   websiteId: string;
-  website?: Ref | null;
-  apiKey: string;
-  /** Usually returned only once, at creation time. */
-  apiSecret?: string;
-  isActive: boolean;
+  type: "REST_API";
+  apiUrl: string;
+  status: IntegrationStatus;
+  lastConnectedAt?: string;
   createdAt?: string;
-  lastUsedAt?: string;
+  updatedAt?: string;
 }
 
-export interface ListResult<T> {
-  items: T[];
-  /** meta.total from the backend when present, otherwise items.length */
-  total: number;
+/** Returned ONLY by POST /website-integrations (the one time the secret is shown). */
+export interface IntegrationCredentials extends WebsiteIntegration {
+  apiKey: string;
+  apiSecret: string;
 }

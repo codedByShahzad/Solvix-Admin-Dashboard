@@ -85,7 +85,7 @@ export function Sidebar({ collapsed, onToggleCollapsed, mobile, onNavigate }: Si
       <div className="shrink-0 border-t border-border p-3">
         {!compact && user && (
           <div className="mb-2 flex items-center gap-3 rounded-lg px-2 py-2">
-            <Avatar name={user.name} src={user.avatar} size="sm" />
+            <Avatar name={user.name} size="sm" />
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium text-fg">{user.name}</div>
               <div className="truncate text-xs capitalize text-muted">{user.role}</div>
