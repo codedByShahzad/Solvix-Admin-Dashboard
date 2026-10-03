@@ -2,7 +2,44 @@ import { Request, Response } from "express";
 import crypto from "crypto";
 
 import WebsiteIntegration from "../models/websiteIntegration.model";
+import mongoose from "mongoose";
 import Website from "../models/Website";
+import { accessibleWebsiteFilter } from "../utils/access";
+
+/**
+ * Integrations belong to a website, so the admin must own that website
+ * (same rule as GET /websites). Sends 400/404 and returns null otherwise.
+ */
+const findAccessibleWebsite = async (
+  req: Request,
+  res: Response,
+  websiteId: unknown
+) => {
+  const id = String(websiteId ?? "");
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    res.status(400).json({
+      success: false,
+      message: "Invalid website ID",
+    });
+    return null;
+  }
+
+  const website = await Website.findOne({
+    _id: id,
+    ...accessibleWebsiteFilter(req.user),
+  });
+
+  if (!website) {
+    res.status(404).json({
+      success: false,
+      message: "Website not found",
+    });
+    return null;
+  }
+
+  return website;
+};
 
 /**
  * Create Website Integration
@@ -25,14 +62,11 @@ export const createWebsiteIntegration = async (
       });
     }
 
-    // 2. Check whether the website exists
-    const website = await Website.findById(websiteId);
+    // 2. Check that the website exists and belongs to this admin
+    const website = await findAccessibleWebsite(req, res, websiteId);
 
     if (!website) {
-      return res.status(404).json({
-        success: false,
-        message: "Website not found",
-      });
+      return;
     }
 
     // 3. Check whether an integration already exists
@@ -109,6 +143,11 @@ export const getWebsiteIntegration = async (
   try {
     const { websiteId } = req.params;
 
+    // Admin must own the website this integration belongs to
+    if (!(await findAccessibleWebsite(req, res, websiteId))) {
+      return;
+    }
+
     // 1. Find integration
     const integration = await WebsiteIntegration.findOne({
       websiteId,
@@ -161,6 +200,11 @@ export const updateWebsiteIntegration = async (
 ) => {
   try {
     const { websiteId } = req.params;
+
+    // Admin must own the website this integration belongs to
+    if (!(await findAccessibleWebsite(req, res, websiteId))) {
+      return;
+    }
 
     const { type, apiUrl } = req.body;
 
@@ -227,6 +271,11 @@ export const deleteWebsiteIntegration = async (
   try {
     const { websiteId } = req.params;
 
+    // Admin must own the website this integration belongs to
+    if (!(await findAccessibleWebsite(req, res, websiteId))) {
+      return;
+    }
+
     // 1. Find the integration
     const integration = await WebsiteIntegration.findOne({
       websiteId,
@@ -273,6 +322,11 @@ export const testWebsiteIntegration = async (
 ) => {
   try {
     const { websiteId } = req.params;
+
+    // Admin must own the website this integration belongs to
+    if (!(await findAccessibleWebsite(req, res, websiteId))) {
+      return;
+    }
 
     // Get integration including hidden credentials
     const integration = await WebsiteIntegration.findOne({

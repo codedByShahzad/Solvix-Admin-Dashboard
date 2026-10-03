@@ -80,11 +80,7 @@ export interface Blog {
   sections: Section[];
   status: BlogStatus;
   /** Populated on list / get (name, email). */
-  author?: {
-  id: string;
-  name: string;
-  email?: string;
-};
+  author: (Ref & { email?: string }) | null;
   relatedSlugs: string[];
   createdAt?: string;
   updatedAt?: string;

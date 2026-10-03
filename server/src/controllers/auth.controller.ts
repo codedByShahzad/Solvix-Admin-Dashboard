@@ -3,6 +3,34 @@ import bcrypt from "bcryptjs";
 import User from "../models/User";
 import { generateToken } from "../utils/jwt";
 
+const escapeRegex = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Find a user by email, tolerant of how the email was STORED.
+ *
+ * New accounts are saved lowercase + trimmed by the schema, and the exact
+ * lookup below matches those. But a record created or edited outside this API
+ * (Atlas/Compass, a seed script, an import) can keep capitals or stray spaces,
+ * and then the exact lookup never finds it — the user gets "Invalid email or
+ * password" even with the correct password. The fallback is an anchored,
+ * case-insensitive match on the full address, so it can only match that same
+ * email, never a different account.
+ */
+const findUserByEmail = async (rawEmail: string) => {
+  const email = rawEmail.trim().toLowerCase();
+
+  const exact = await User.findOne({ email });
+  if (exact) return exact;
+
+  return User.findOne({
+    email: {
+      $regex: `^\\s*${escapeRegex(email)}\\s*$`,
+      $options: "i",
+    },
+  });
+};
+
 export const register = async (req: Request, res: Response) => {
   try {
     const { name, email, password, role } = req.body;
@@ -21,8 +49,8 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    // 3. Check if user already exists
-    const existingUser = await User.findOne({ email });
+    // 3. Check if user already exists (any casing / spacing)
+    const existingUser = await findUserByEmail(String(email));
 
     if (existingUser) {
       return res.status(409).json({
@@ -72,8 +100,8 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    // 2. Find user
-    const user = await User.findOne({ email });
+    // 2. Find user (email normalised; see findUserByEmail)
+    const user = await findUserByEmail(String(email));
 
     if (!user) {
       return res.status(401).json({

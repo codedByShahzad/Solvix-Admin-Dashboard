@@ -14,7 +14,9 @@ export const generateToken = (userId: string, role: string) => {
     },
     secret,
     {
-      expiresIn: "7d",
+      // JWT_EXPIRES_IN from .env (e.g. "7d", "12h"); defaults to 7 days.
+      expiresIn: (process.env.JWT_EXPIRES_IN ||
+        "7d") as jwt.SignOptions["expiresIn"],
     }
   );
 };

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import mongoose from "mongoose";
 import Website from "../models/Website";
+import { canAccessWebsiteDoc } from "../utils/access";
 
 export const websiteAccessMiddleware = async (
   req: Request,
@@ -28,18 +29,10 @@ export const websiteAccessMiddleware = async (
       });
     }
 
-    // Admin has access to every website
-    if (req.user?.role === "admin") {
-      return next();
-    }
-
-    // Editor must be assigned to this website
-    if (req.user?.role === "editor") {
-      const isAssigned = website.editors?.some(
-        (editorId) => editorId.toString() === req.user?.userId,
-      );
-
-      if (!isAssigned) {
+    // Admin → must own the website; editor → must be assigned to it.
+    // Same rule as GET /websites (see utils/access.ts).
+    if (req.user?.role === "admin" || req.user?.role === "editor") {
+      if (!canAccessWebsiteDoc(website, req.user)) {
         return res.status(403).json({
           success: false,
           message: "Forbidden: You do not have access to this website",

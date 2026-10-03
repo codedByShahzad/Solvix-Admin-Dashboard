@@ -7,6 +7,7 @@ import BlogModel from "../models/Blog";
 
 import cloudinary from "../config/cloudinary";
 import { uploadImage } from "../services/media.service";
+import { accessibleWebsiteFilter, canAccessWebsiteDoc } from "../utils/access";
 
 // ============================================================
 // Helper: Validate MongoDB ObjectId
@@ -20,34 +21,12 @@ const isValidId = (id: string): boolean => {
 // Helper: Check Website Access
 // ============================================================
 
+// Same rule as GET /websites (see utils/access.ts):
+// admin → websites they own, editor → websites they are assigned to.
 const checkWebsiteAccess = (
   website: any,
   req: Request
-): boolean => {
-  const userId = req.user?.userId;
-  const role = req.user?.role;
-
-  if (!userId) {
-    return false;
-  }
-
-  // Admin can access all websites
-  if (role === "admin") {
-    return true;
-  }
-
-  // Editor can access websites they are assigned to (website.editors),
-  // the same rule used by websiteAccess.middleware and GET /websites.
-  if (role === "editor") {
-    const isAssigned = (website?.editors ?? []).some(
-      (editorId: any) => editorId?.toString() === userId
-    );
-
-    return isAssigned;
-  }
-
-  return false;
-};
+): boolean => canAccessWebsiteDoc(website, req.user);
 
 // ============================================================
 // Upload Media
@@ -238,15 +217,10 @@ export const getAllMedia = async (
     // Find websites accessible by user
     // --------------------------------------------------------
 
-    let websites;
-
-    if (role === "admin") {
-      websites = await WebsiteModel.find().select("_id");
-    } else {
-      websites = await WebsiteModel.find({
-        editors: userId,
-      }).select("_id");
-    }
+    // Admin → owned websites, editor → assigned websites.
+    const websites = await WebsiteModel.find(
+      accessibleWebsiteFilter(req.user)
+    ).select("_id");
 
     const websiteIds = websites.map(
       (website) => website._id
