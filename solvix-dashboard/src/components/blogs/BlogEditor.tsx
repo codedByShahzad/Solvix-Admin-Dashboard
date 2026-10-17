@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import type { Editor } from "@tiptap/react";
 import { useRouter } from "next/navigation";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,14 +28,15 @@ import {
   SEO_TITLE_MAX,
   blogSchema,
   blogToForm,
-  sectionsToPlainText,
+  type BlogFieldValues,
   type BlogFormValues,
 } from "@/features/blogs/schema";
+import { countWords, docToPlainText, normalizeDoc, renderHtml, type ContentDoc } from "@/lib/blogContent";
 import { estimateReadingTime, slugify } from "@/utils/slug";
 import { formatDateTime, todayInput } from "@/utils/format";
 import { cn } from "@/lib/cn";
 import type { Blog } from "@/types";
-import { SectionsEditor } from "./SectionsEditor";
+import { RichTextEditor } from "./RichTextEditor";
 import { useSubmitLock } from "@/hooks/useSubmitLock";
 import { SeoPreview } from "./SeoPreview";
 
@@ -69,6 +71,33 @@ export function BlogEditor({
   const blogsQ = useGetBlogsQuery();
   const [slugTouched, setSlugTouched] = useState(!!blog);
 
+  // The article body is owned by the rich-text editor; the other fields by react-hook-form.
+  const [initial] = useState(() => {
+    const { contentJson, ...fields } = blogToForm(blog, defaults);
+    return { fields, contentJson, html: renderHtml(contentJson) };
+  });
+  const [content, setContent] = useState<ContentDoc>(initial.contentJson);
+  const [contentBroken, setContentBroken] = useState(false);
+  const editorRef = useRef<Editor | null>(null);
+  const onEditorReady = useCallback((e: Editor) => {
+    editorRef.current = e;
+  }, []);
+  const onContentChange = useCallback((json: unknown) => {
+    try {
+      setContent(normalizeDoc(json));
+    } catch {
+      /* the editor only produces documents */
+    }
+  }, []);
+  /** The latest document, read straight from the editor at save time. */
+  const currentContent = () => {
+    try {
+      return editorRef.current ? normalizeDoc(editorRef.current.getJSON()) : content;
+    } catch {
+      return content;
+    }
+  };
+
   const {
     register,
     handleSubmit,
@@ -77,13 +106,12 @@ export function BlogEditor({
     setValue,
     getValues,
     formState: { errors, isDirty },
-  } = useForm<BlogFormValues>({ resolver: zodResolver(blogSchema), defaultValues: blogToForm(blog, defaults) });
+  } = useForm<BlogFieldValues>({ resolver: zodResolver(blogSchema), defaultValues: initial.fields });
 
   const title = watch("title");
   const slug = watch("slug");
   const websiteId = watch("website");
   const status = watch("status");
-  const sections = watch("sections");
   const seoTitle = watch("seoTitle");
   const seoDescription = watch("seoDescription");
   const canonicalPath = watch("canonicalPath");
@@ -95,9 +123,11 @@ export function BlogEditor({
   }, [title, slugTouched, setValue]);
 
   const website = websites.find((w) => w.id === websiteId);
-  const plainText = useMemo(() => sectionsToPlainText(sections ?? []), [sections]);
-  const words = plainText.split(/\s+/).filter(Boolean).length;
-  const minutes = estimateReadingTime(plainText);
+  const deferredContent = useDeferredValue(content);
+  const words = useMemo(() => countWords(deferredContent), [deferredContent]);
+  const minutes = useMemo(() => estimateReadingTime(docToPlainText(deferredContent)), [deferredContent]);
+  // Content counts as changed only when the rendered article changes (not Tiptap-internal JSON details).
+  const contentDirty = useMemo(() => renderHtml(deferredContent) !== initial.html, [deferredContent, initial.html]);
 
   const relatedSuggestions = useMemo(
     () =>
@@ -112,7 +142,7 @@ export function BlogEditor({
   const submitWith = (nextStatus?: BlogFormValues["status"]) =>
     lock(handleSubmit(
       async (values) => {
-        const final = { ...values };
+        const final: BlogFormValues = { ...values, contentJson: currentContent() };
         if (nextStatus) final.status = nextStatus;
         if (final.status === "published" && !final.publishDate) final.publishDate = todayInput();
         await onSubmit(final);
@@ -193,7 +223,7 @@ export function BlogEditor({
           <FormSection
             id="content"
             title="Content"
-            description="The article body: sections with paragraphs and lists."
+            description="The article body. H2 and H3 headings build the table of contents."
             icon={<FileText />}
             action={
               <span className="whitespace-nowrap rounded-full bg-surface-2 px-2.5 py-1 text-xs font-medium tabular-nums text-muted">
@@ -201,10 +231,11 @@ export function BlogEditor({
               </span>
             }
           >
-            <Controller
-              control={control}
-              name="sections"
-              render={({ field }) => <SectionsEditor value={field.value} onChange={field.onChange} errors={errors.sections as never} />}
+            <RichTextEditor
+              initialContent={initial.contentJson}
+              onChange={onContentChange}
+              onReady={onEditorReady}
+              onContentError={() => setContentBroken(true)}
             />
           </FormSection>
 
@@ -312,7 +343,7 @@ export function BlogEditor({
                     variant="ghost"
                     size="xs"
                     onClick={() =>
-                      setValue("readingTime", `${estimateReadingTime(sectionsToPlainText(getValues("sections")))} min read`, {
+                      setValue("readingTime", `${estimateReadingTime(docToPlainText(currentContent()))} min read`, {
                         shouldDirty: true,
                         shouldValidate: true,
                       })
@@ -372,16 +403,16 @@ export function BlogEditor({
         </div>
       </div>
 
-      <FormActions note={isDirty ? "Unsaved changes" : blog ? `Last saved ${formatDateTime(blog.updatedAt)}` : undefined}>
+      <FormActions note={contentBroken ? "Saving disabled — content could not be loaded" : isDirty || contentDirty ? "Unsaved changes" : blog ? `Last saved ${formatDateTime(blog.updatedAt)}` : undefined}>
         <Button variant="secondary" onClick={() => router.push(cancelHref)} disabled={busy}>
           Cancel
         </Button>
         {!isPublished && (
-          <Button variant="secondary" onClick={submitWith("draft")} disabled={busy}>
+          <Button variant="secondary" onClick={submitWith("draft")} disabled={busy || contentBroken}>
             Save draft
           </Button>
         )}
-        <Button onClick={submitWith("published")} loading={busy} leftIcon={<Send />}>
+        <Button onClick={submitWith("published")} loading={busy} disabled={contentBroken} leftIcon={<Send />}>
           {isPublished ? "Update" : "Publish"}
         </Button>
       </FormActions>

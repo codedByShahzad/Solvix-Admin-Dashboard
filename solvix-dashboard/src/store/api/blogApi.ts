@@ -1,6 +1,7 @@
 import { baseApi } from "./baseApi";
 import { mapBlog, type DataEnvelope, type RawBlog } from "@/lib/api/mappers";
 import type { Blog, BlogStatus, Section } from "@/types";
+import type { ContentDoc } from "@/lib/blogContent";
 
 /** Request body for POST /blogs and PATCH /blogs/:id (fields of models/Blog.ts). */
 export interface BlogPayload {
@@ -17,7 +18,10 @@ export interface BlogPayload {
   seoDescription?: string;
   keywords: string[];
   ogImage?: string;
-  sections: Section[];
+  /** Rich-text content (Tiptap JSON); the backend derives contentHtml, toc and sections from it. */
+  contentJson?: ContentDoc;
+  /** Legacy body format; still accepted by the backend. */
+  sections?: Section[];
   status: BlogStatus;
   relatedSlugs: string[];
 }

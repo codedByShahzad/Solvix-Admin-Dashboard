@@ -21,6 +21,16 @@ interface Section {
 }
 
 // ========================================
+// Table of contents entry
+// ========================================
+
+interface TocItem {
+  id: string;
+  title: string;
+  level: 2 | 3;
+}
+
+// ========================================
 // Blog
 // ========================================
 
@@ -49,6 +59,19 @@ export interface Blog extends Document {
   ogImage?: string;
 
   sections: Section[];
+
+  /**
+   * Rich-text content (Tiptap JSON) — the source of truth for posts written
+   * with the rich-text editor. On save, `contentHtml`, `toc` and `sections`
+   * are derived from it (utils/blogContent.ts). Older posts only have `sections`.
+   */
+  contentJson?: Record<string, unknown>;
+
+  /** Article HTML with heading ids — derived from contentJson. */
+  contentHtml?: string;
+
+  /** Table of contents from the H2/H3 headings — derived from contentJson. */
+  toc?: TocItem[];
 
   status: "draft" | "published" | "archived";
 
@@ -109,6 +132,21 @@ const sectionSchema = new Schema<Section>(
       type: [blockSchema],
       default: [],
     },
+  },
+  {
+    _id: false,
+  }
+);
+
+// ========================================
+// TOC Schema
+// ========================================
+
+const tocItemSchema = new Schema<TocItem>(
+  {
+    id: { type: String, required: true },
+    title: { type: String, required: true },
+    level: { type: Number, enum: [2, 3], required: true },
   },
   {
     _id: false,
@@ -193,6 +231,20 @@ const blogSchema = new Schema<Blog>(
     sections: {
       type: [sectionSchema],
       default: [],
+    },
+
+    contentJson: {
+      type: Schema.Types.Mixed,
+      default: undefined,
+    },
+
+    contentHtml: {
+      type: String,
+    },
+
+    toc: {
+      type: [tocItemSchema],
+      default: undefined,
     },
 
     status: {

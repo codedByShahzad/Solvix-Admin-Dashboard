@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Blog, BlogStatus } from "@/types";
 import type { BlogPayload } from "@/store/api/blogApi";
 import { toDateInput } from "@/utils/format";
-import { uid } from "@/utils/slug";
+import { normalizeDoc, sectionsToDoc, type ContentDoc } from "@/lib/blogContent";
 
 export const BLOG_STATUSES: { value: BlogStatus; label: string }[] = [
   { value: "draft", label: "Draft" },
@@ -14,20 +14,6 @@ export const SEO_TITLE_MAX = 60;
 export const SEO_DESC_MAX = 160;
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
-const blockSchema = z.object({
-  type: z.enum(["paragraph", "list"]),
-  text: z.string().optional(),
-  items: z.array(z.string()).optional(),
-});
-
-/** `key` is a client-only React key; the backend fields are id, title, blocks. */
-const sectionSchema = z.object({
-  key: z.string(),
-  id: z.string().trim().min(1, "Section ID is required").regex(SLUG_RE, "Use lowercase letters, numbers and hyphens"),
-  title: z.string().trim().min(1, "Section title is required"),
-  blocks: z.array(blockSchema),
-});
 
 /** Mirrors models/Blog.ts (website, slug, title required; slug unique per website). */
 export const blogSchema = z
@@ -50,21 +36,21 @@ export const blogSchema = z
     heroImage: z.string().trim(),
     ogImage: z.string().trim(),
     relatedSlugs: z.array(z.string()),
-    sections: z.array(sectionSchema),
-  })
-  .superRefine((v, ctx) => {
-    const seen = new Set<string>();
-    v.sections.forEach((s, i) => {
-      if (s.id && seen.has(s.id)) ctx.addIssue({ code: "custom", path: ["sections", i, "id"], message: "Section IDs must be unique" });
-      seen.add(s.id);
-    });
   });
 
-export type BlogFormValues = z.infer<typeof blogSchema>;
-export type SectionFormValue = BlogFormValues["sections"][number];
+/** The fields managed by react-hook-form. */
+export type BlogFieldValues = z.infer<typeof blogSchema>;
 
-export function newSection(title = "", id = ""): SectionFormValue {
-  return { key: uid("sec"), id, title, blocks: [{ type: "paragraph", text: "" }] };
+/** Everything the blog form submits: the fields plus the rich-text document (owned by the editor). */
+export type BlogFormValues = BlogFieldValues & { contentJson: ContentDoc };
+
+/**
+ * The document to edit: the stored rich-text content, or — for posts written
+ * with the old section editor — those sections converted (each section → H2
+ * followed by its paragraphs and lists, in order). Nothing is saved until the user saves.
+ */
+export function blogContentDoc(b?: Blog): ContentDoc {
+  return b?.contentJson ?? sectionsToDoc(b?.sections ?? []);
 }
 
 export function blogToForm(b?: Blog, defaults?: Partial<BlogFormValues>): BlogFormValues {
@@ -84,7 +70,7 @@ export function blogToForm(b?: Blog, defaults?: Partial<BlogFormValues>): BlogFo
     heroImage: b?.heroImage ?? "",
     ogImage: b?.ogImage ?? "",
     relatedSlugs: b?.relatedSlugs ?? [],
-    sections: (b?.sections ?? []).map((s) => ({ key: uid("sec"), id: s.id, title: s.title, blocks: s.blocks })),
+    contentJson: b ? blogContentDoc(b) : (defaults?.contentJson ?? { type: "doc", content: [] }),
   };
 }
 
@@ -107,20 +93,7 @@ export function toBlogPayload(v: BlogFormValues): BlogPayload {
     heroImage: v.heroImage,
     ogImage: v.ogImage,
     relatedSlugs: v.relatedSlugs,
-    sections: v.sections.map((s) => ({
-      id: s.id,
-      title: s.title,
-      blocks: s.blocks
-        .map((b) =>
-          b.type === "list"
-            ? { type: "list" as const, items: (b.items ?? []).map((i) => i.trim()).filter(Boolean) }
-            : { type: "paragraph" as const, text: (b.text ?? "").trim() },
-        )
-        .filter((b) => (b.type === "list" ? b.items.length > 0 : b.text.length > 0)),
-    })),
+    // The backend derives contentHtml, toc and the legacy sections from this document.
+    contentJson: normalizeDoc(v.contentJson),
   };
-}
-
-export function sectionsToPlainText(sections: { title: string; blocks: { text?: string; items?: string[] }[] }[]): string {
-  return sections.map((s) => [s.title, ...s.blocks.map((b) => [b.text, ...(b.items ?? [])].filter(Boolean).join(" "))].join(" ")).join(" ");
 }

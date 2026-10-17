@@ -1,7 +1,17 @@
 import type { Section } from "@/types";
+import { renderHtml, type ContentDoc } from "@/lib/blogContent";
 
-/** Read-only rendering of Blog.sections (article preview). */
-export function BlogContent({ sections }: { sections: Section[] }) {
+/**
+ * Read-only article preview. Rich-text posts use renderHtml() — the same
+ * escaped, allow-listed HTML (and heading ids) the backend stores as
+ * contentHtml. Older posts render their sections as before.
+ */
+export function BlogContent({ sections, contentJson }: { sections: Section[]; contentJson?: ContentDoc | null }) {
+  if (contentJson) {
+    const html = renderHtml(contentJson);
+    if (!html) return <p className="text-sm italic text-subtle">This post has no content yet.</p>;
+    return <div className="solvix-prose" dangerouslySetInnerHTML={{ __html: html }} />;
+  }
   if (!sections.length) return <p className="text-sm italic text-subtle">This post has no content yet.</p>;
   return (
     <div className="space-y-8 text-[15px] leading-[1.75] text-fg/90">

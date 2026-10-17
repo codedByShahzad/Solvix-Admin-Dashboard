@@ -108,3 +108,56 @@
     text-wrap: balance;
   }
 }
+
+/* ─── Blog article typography: rich-text editor + article preview ────────── */
+@layer components {
+  .solvix-prose {
+    @apply text-[15px] leading-[1.75] text-fg/90;
+  }
+  .solvix-prose > * + * {
+    @apply mt-4;
+  }
+  .solvix-prose h2 {
+    @apply mt-9 text-xl font-semibold leading-snug tracking-tight text-fg;
+  }
+  .solvix-prose h3 {
+    @apply mt-7 text-[17px] font-semibold leading-snug text-fg;
+  }
+  .solvix-prose > :first-child {
+    @apply mt-0;
+  }
+  .solvix-prose h2 + *,
+  .solvix-prose h3 + * {
+    @apply mt-2.5;
+  }
+  .solvix-prose a {
+    @apply font-medium text-brand underline decoration-brand/40 underline-offset-2 hover:decoration-brand;
+  }
+  .solvix-prose strong {
+    @apply font-semibold text-fg;
+  }
+  .solvix-prose ul {
+    @apply list-disc space-y-1.5 pl-6 marker:text-subtle;
+  }
+  .solvix-prose ol {
+    @apply list-decimal space-y-1.5 pl-6 marker:text-subtle;
+  }
+  .solvix-prose li > :is(p, ul, ol) {
+    @apply mt-1.5 first:mt-0;
+  }
+  .solvix-prose blockquote {
+    @apply border-l-[3px] border-brand/50 pl-4 italic text-muted;
+  }
+
+  .solvix-editor {
+    @apply min-h-[420px] px-5 py-5 outline-none sm:px-7 sm:py-6;
+  }
+  .solvix-editor .is-empty::before,
+  .solvix-editor p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    @apply pointer-events-none float-left h-0 font-normal not-italic text-subtle;
+  }
+  .solvix-editor :is(h2, h3).is-empty::before {
+    @apply font-semibold;
+  }
+}

@@ -2,6 +2,11 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import BlogModel from "../models/Blog";
 import { getAccessibleWebsiteIds as getUserWebsiteIds } from "../utils/access";
+import {
+  BlogContentError,
+  deriveContent,
+  sectionsToDoc,
+} from "../utils/blogContent";
 
 // ========================================
 // Helpers
@@ -43,6 +48,13 @@ const sendBlogError = (
     errors?: Record<string, { message: string }>;
   };
 
+  if (error instanceof BlogContentError) {
+    return res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+
   if (err?.code === 11000) {
     return res.status(409).json({
       success: false,
@@ -78,6 +90,30 @@ const sendBlogError = (
 const isValidId = (id: unknown) =>
   typeof id === "string" && mongoose.Types.ObjectId.isValid(id);
 
+/**
+ * Rich-text content: `contentJson` is the source of truth. `contentHtml`,
+ * `toc` and the legacy `sections` are always derived from it here, so they
+ * cannot drift apart (values a client sends for them are ignored).
+ * A client that still sends only `sections` keeps working: they are validated
+ * as before and converted. Throws BlogContentError / ValidationError (→ 400).
+ */
+const applyContent = (body: Record<string, unknown>) => {
+  delete body.contentHtml;
+  delete body.toc;
+
+  if (body.contentJson !== undefined) {
+    Object.assign(body, deriveContent(body.contentJson));
+  } else if (body.sections !== undefined) {
+    const legacyError = new BlogModel({ sections: body.sections }).validateSync([
+      "sections",
+    ]);
+    if (legacyError) throw legacyError;
+    Object.assign(body, deriveContent(sectionsToDoc(body.sections)));
+  }
+
+  return body;
+};
+
 // ========================================
 // Create Blog
 // ========================================
@@ -94,7 +130,7 @@ export const createBlog = async (req: Request, res: Response) => {
     }
 
     const blog = await BlogModel.create({
-      ...req.body,
+      ...applyContent({ ...req.body }),
       author: req.user?.userId,
       status: req.body.status || "draft",
     });
@@ -230,6 +266,8 @@ export const updateBlog = async (req: Request, res: Response) => {
     }
 
     const { author: _author, ...updateData } = req.body;
+
+    applyContent(updateData);
 
     // Only stamp a publish date when publishing without one,
     // so editing a published post keeps its original date.

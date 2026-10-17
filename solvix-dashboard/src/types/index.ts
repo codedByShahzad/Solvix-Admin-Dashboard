@@ -4,6 +4,8 @@
  * by src/lib/api/mappers.ts.
  */
 
+import type { ContentDoc } from "@/lib/blogContent";
+
 export type Role = "admin" | "editor";
 
 /** A populated reference (e.g. blog.website → { _id, name, domain }). */
@@ -77,7 +79,10 @@ export interface Blog {
   seoDescription?: string;
   keywords: string[];
   ogImage?: string;
+  /** Legacy section format (derived by the backend for posts saved with the rich-text editor). */
   sections: Section[];
+  /** Rich-text content (Tiptap JSON); null for posts not yet saved with the rich-text editor. */
+  contentJson: ContentDoc | null;
   status: BlogStatus;
   /** Populated on list / get (name, email). */
   author: (Ref & { email?: string }) | null;

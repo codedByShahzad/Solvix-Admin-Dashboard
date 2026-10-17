@@ -102,7 +102,7 @@ export default function BlogDetailPage() {
                   <h2 className="text-balance text-3xl font-semibold leading-tight tracking-tight text-fg">{blog.title}</h2>
                   {blog.subtitle && <p className="mt-3 text-lg leading-relaxed text-muted">{blog.subtitle}</p>}
                   <div className="my-7 h-px bg-border" />
-                  <BlogContent sections={blog.sections} />
+                  <BlogContent sections={blog.sections} contentJson={blog.contentJson} />
                 </article>
               </Card>
 

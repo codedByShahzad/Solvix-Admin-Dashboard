@@ -13,6 +13,7 @@
  * Mongo documents use `_id`; auth user objects use `id`.
  * Populated references arrive as objects, unpopulated ones as ID strings.
  */
+import { normalizeDoc, type ContentDoc } from "@/lib/blogContent";
 import type {
   Blog,
   BlogStatus,
@@ -100,6 +101,7 @@ export interface RawBlog {
   keywords?: string[];
   ogImage?: string;
   sections?: Section[];
+  contentJson?: unknown;
   status: BlogStatus;
   author: RawRef;
   relatedSlugs?: string[];
@@ -181,6 +183,16 @@ function mapBlock(b: Block): Block {
   return b.type === "list" ? { type: "list", items: b.items ?? [] } : { type: "paragraph", text: b.text ?? "" };
 }
 
+/** Stored rich-text document, cleaned with the same rules as the backend; null if absent or unreadable. */
+function readContentDoc(raw: unknown): ContentDoc | null {
+  if (!raw) return null;
+  try {
+    return normalizeDoc(raw);
+  } catch {
+    return null;
+  }
+}
+
 export function mapBlog(b: RawBlog): Blog {
   const author = toRef(b.author);
   return {
@@ -200,6 +212,7 @@ export function mapBlog(b: RawBlog): Blog {
     keywords: b.keywords ?? [],
     ogImage: b.ogImage,
     sections: (b.sections ?? []).map((s) => ({ id: s.id, title: s.title, blocks: (s.blocks ?? []).map(mapBlock) })),
+    contentJson: readContentDoc(b.contentJson),
     status: b.status,
     author: author ? { ...author, email: typeof b.author === "object" && b.author ? b.author.email : undefined } : null,
     relatedSlugs: b.relatedSlugs ?? [],

@@ -12,6 +12,12 @@
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
     "@reduxjs/toolkit": "^2.13.0",
+    "@tiptap/extension-blockquote": "3.32.0",
+    "@tiptap/extension-list": "3.32.0",
+    "@tiptap/extensions": "3.32.0",
+    "@tiptap/pm": "3.32.0",
+    "@tiptap/react": "3.32.0",
+    "@tiptap/starter-kit": "3.32.0",
     "clsx": "^2.1.1",
     "geist": "^1.7.2",
     "lucide-react": "^1.48.0",
